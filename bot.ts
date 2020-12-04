@@ -26,7 +26,7 @@ function createReportAndSend(userMessage: Discord.Message): void {
 			const embed = new Discord.MessageEmbed({
 				author: {
 					name: userMessage.author.username,
-					iconURL: userMessage.author.avatar || userMessage.author.defaultAvatarURL
+					iconURL: userMessage.author.avatarURL() || userMessage.author.defaultAvatarURL
 				},
 				color: Math.floor(Math.random() * 16777215 /** Gets random color each time for each message :) */),
 				fields: embedFields
