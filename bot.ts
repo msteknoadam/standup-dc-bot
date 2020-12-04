@@ -63,6 +63,7 @@ function handleDMmessage(message: Discord.Message): void {
 						today: "",
 						blocks: ""
 					};
+					message.channel.send("What did you do yesterday?");
 				} else {
 					message.channel.send(
 						`You already have started your conversation. Please either type your next item in the list or type '${prefix}end' to finish your report.`
@@ -102,6 +103,15 @@ function handleDMmessage(message: Discord.Message): void {
 			);
 		} else {
 			user[user.currentStatus] += `${messageContent}\n`;
+			return void message.channel.send(
+				`I have recorded this line: "${messageContent}". If you want to add more to ${user.currentStatus}'${
+					user.currentStatus !== userChatStatuses.BLOCKS ? "s" : "" /** Prevent "blocks's" */
+				} list, just type it or type '${prefix}${
+					user.currentStatus === userChatStatuses.BLOCKS
+						? "end' to end your report and get it sent."
+						: "next' to switch to next question."
+				}`
+			);
 		}
 	}
 }
