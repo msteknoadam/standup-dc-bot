@@ -7,7 +7,7 @@ const ongoingChats: {
 } = {};
 const prefix = CONFIG.commandPrefix;
 
-function createReportAndSend(userMessage: Discord.Message): void {
+async function createReportAndSend(userMessage: Discord.Message): Promise<void> {
 	userMessage.channel.send("Thanks for your report, I will now send this information to the proper chat.");
 	const uid = userMessage.author.id;
 	const user = ongoingChats[uid];
@@ -32,7 +32,13 @@ function createReportAndSend(userMessage: Discord.Message): void {
 				fields: embedFields
 			});
 			delete ongoingChats[uid];
-			return void reportsChat.send(embed);
+			try {
+				return void (await reportsChat.send(embed));
+			} catch (e) {
+				return void userMessage.channel.send(
+					`There has been an error. Please contact <@${CONFIG.developerUserId}> regarding this issue.`
+				);
+			}
 		} else {
 			delete ongoingChats[uid];
 			return void userMessage.channel.send(
