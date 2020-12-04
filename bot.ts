@@ -125,6 +125,7 @@ bot.on("error", async (error) => {
 });
 
 bot.on("message", (message) => {
+	if (message.author.bot) return;
 	if (message.channel.type === "dm") {
 		handleDMmessage(message);
 	} // No need to handle other cases since this bot only checks DM messages and then sends message by itself.
