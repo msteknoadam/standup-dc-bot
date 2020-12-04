@@ -95,6 +95,7 @@ function handleDMmessage(message: Discord.Message): void {
 				break;
 			case dmCommands.end:
 				if (user.currentStatus === userChatStatuses.BLOCKS) {
+					if (!user.blocks) user.blocks = "Nothing";
 					createReportAndSend(message);
 				}
 				break;
