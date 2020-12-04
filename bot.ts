@@ -97,6 +97,10 @@ function handleDMmessage(message: Discord.Message): void {
 				if (user.currentStatus === userChatStatuses.BLOCKS) {
 					if (!user.blocks) user.blocks = "Nothing";
 					createReportAndSend(message);
+				} else {
+					message.channel.send(
+						`You haven't finished last question. If you have, please type '${prefix}next' to skip to the next question.`
+					);
 				}
 				break;
 		}
