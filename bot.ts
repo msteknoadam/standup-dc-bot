@@ -134,10 +134,18 @@ bot.on("error", async (error) => {
 	console.error(error);
 });
 
-bot.on("message", (message) => {
+bot.on("message", (message): void => {
 	if (message.author.bot) return;
-	if (message.channel.type === "dm") {
-		handleDMmessage(message);
+	if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
+		// Dev tool to let developer run commands live.
+		try {
+			const response = eval(message.content.slice(`${prefix}eval`.length));
+			return void message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
+		} catch (err) {
+			return void message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
+		}
+	} else if (message.channel.type === "dm") {
+		return handleDMmessage(message);
 	} // No need to handle other cases since this bot only checks DM messages and then sends message by itself.
 });
 
