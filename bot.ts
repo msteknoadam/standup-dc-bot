@@ -31,13 +31,16 @@ function createReportAndSend(userMessage: Discord.Message): void {
 				color: Math.floor(Math.random() * 16777215 /** Gets random color each time for each message :) */),
 				fields: embedFields
 			});
+			delete ongoingChats[uid];
 			return void reportsChat.send(embed);
 		} else {
+			delete ongoingChats[uid];
 			return void userMessage.channel.send(
 				`Standup reports server has not been set up. Please contact <@${CONFIG.developerUserId}> regarding this issue.`
 			);
 		}
 	} else {
+		delete ongoingChats[uid];
 		return void userMessage.channel.send(
 			`Standup reports server has not been set up. Please contact <@${CONFIG.developerUserId}> regarding this issue.`
 		);
