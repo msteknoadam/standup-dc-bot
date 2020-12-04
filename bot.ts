@@ -130,7 +130,7 @@ bot.on("message", (message) => {
 	} // No need to handle other cases since this bot only checks DM messages and then sends message by itself.
 });
 
-bot.login(process.env.DISCORD_TOKEN);
+bot.login(CONFIG.DISCORD_TOKEN);
 
 // Add graceful exit so bot client doesn't look like it's online when the process is closed.
 

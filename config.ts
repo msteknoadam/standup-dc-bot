@@ -14,7 +14,7 @@ const CONFIG = {
 const localConfigPath = path.join(__dirname, "config.local.ts");
 if (fs.existsSync(localConfigPath)) {
 	// eslint-disable-next-line @typescript-eslint/no-var-requires
-	Object.assign(CONFIG, require(localConfigPath));
+	Object.assign(CONFIG, require(localConfigPath).default);
 }
 
 export default CONFIG;
