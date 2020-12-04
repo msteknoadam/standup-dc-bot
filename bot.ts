@@ -1,10 +1,109 @@
-import * as dotenv from "dotenv";
 import * as Discord from "discord.js";
+import { dmCommands, exitTypes, userChatStatuses } from "./types";
+import CONFIG from "./config";
 
-dotenv.config();
+const ongoingChats: {
+	[s: string]: { currentStatus: userChatStatuses; yesterday: string; today: string; blocks: string };
+} = {};
+const prefix = CONFIG.commandPrefix;
 
-if (!process.env.DISCORD_TOKEN) {
-	throw Error("Please add your Discord token using .env file. Check documentation to see how you can do see.");
+function createReportAndSend(userMessage: Discord.Message): void {
+	userMessage.channel.send("Thanks for your report, I will now send this information to the proper chat.");
+	const uid = userMessage.author.id;
+	const user = ongoingChats[uid];
+	const reportsServer = bot.guilds.cache.find((guild) => guild.id === CONFIG.reportServerId);
+	if (reportsServer) {
+		const reportsChat = reportsServer.channels.cache.get(CONFIG.reportChannelId) as Discord.TextChannel | undefined;
+		if (reportsChat) {
+			const embedFields: Discord.EmbedField[] = [];
+			embedFields.push({ name: "What did I do yesterday?", value: user.yesterday, inline: false });
+			embedFields.push({ name: "What will I do today?", value: user.today, inline: false });
+			embedFields.push({
+				name: "Anything that will block me in my work today?",
+				value: user.blocks,
+				inline: false
+			});
+			const embed = new Discord.MessageEmbed({
+				author: {
+					name: userMessage.author.username,
+					iconURL: userMessage.author.avatar || userMessage.author.defaultAvatarURL
+				},
+				color: Math.floor(Math.random() * 16777215 /** Gets random color each time for each message :) */),
+				fields: embedFields
+			});
+			return void reportsChat.send(embed);
+		} else {
+			return void userMessage.channel.send(
+				`Standup reports server has not been set up. Please contact <@${CONFIG.developerUserId}> regarding this issue.`
+			);
+		}
+	} else {
+		return void userMessage.channel.send(
+			`Standup reports server has not been set up. Please contact <@${CONFIG.developerUserId}> regarding this issue.`
+		);
+	}
+}
+
+function handleDMmessage(message: Discord.Message): void {
+	let messageContent = message.content;
+	const uid = message.author.id;
+	const user = ongoingChats[uid];
+	if (messageContent.startsWith(prefix)) {
+		messageContent = messageContent.slice(prefix.length);
+		if (!user && messageContent !== dmCommands.start)
+			return void message.channel.send(
+				`You haven't started a conversation yet, please type '${prefix}start' first!`
+			);
+		switch (messageContent as dmCommands) {
+			case dmCommands.start:
+				if (!user) {
+					ongoingChats[uid] = {
+						currentStatus: userChatStatuses.YESTERDAY,
+						yesterday: "",
+						today: "",
+						blocks: ""
+					};
+				} else {
+					message.channel.send(
+						`You already have started your conversation. Please either type your next item in the list or type '${prefix}end' to finish your report.`
+					);
+				}
+				break;
+			case dmCommands.next:
+				if (user.currentStatus === userChatStatuses.YESTERDAY) {
+					if (!user.yesterday)
+						message.channel.send("You cannot leave yesterday's note empty, please type something.");
+					else {
+						user.currentStatus = userChatStatuses.TODAY;
+						message.channel.send("What will you do today?");
+					}
+				} else if (user.currentStatus === userChatStatuses.TODAY) {
+					if (!user.today)
+						message.channel.send("You cannot leave today's note empty, please type something.");
+					else {
+						user.currentStatus = userChatStatuses.BLOCKS;
+						message.channel.send("Anything that will block you in your work today?");
+					}
+				} else if (user.currentStatus === userChatStatuses.BLOCKS) {
+					if (!user.blocks) user.blocks = "Nothing.";
+					createReportAndSend(message);
+				}
+				break;
+			case dmCommands.end:
+				if (user.currentStatus === userChatStatuses.BLOCKS) {
+					createReportAndSend(message);
+				}
+				break;
+		}
+	} else {
+		if (!user) {
+			return void message.channel.send(
+				`You haven't started a conversation yet, please type '${prefix}start' first!`
+			);
+		} else {
+			user[user.currentStatus] += `${messageContent}\n`;
+		}
+	}
 }
 
 const bot = new Discord.Client();
@@ -13,19 +112,29 @@ bot.on("ready", () => {
 	console.log("Bot has successfully logged in.");
 });
 
+bot.on("reconnecting", async () => {
+	console.error("Bot is currently unavailable, trying to reconnect.");
+});
+
+bot.on("disconnect", async () => {
+	console.error("Bot coulnd't reconnect, bot is not totally disconnected.");
+});
+
+bot.on("error", async (error) => {
+	console.error(error);
+});
+
+bot.on("message", (message) => {
+	if (message.channel.type === "dm") {
+		handleDMmessage(message);
+	} // No need to handle other cases since this bot only checks DM messages and then sends message by itself.
+});
+
 bot.login(process.env.DISCORD_TOKEN);
 
 // Add graceful exit so bot client doesn't look like it's online when the process is closed.
 
-enum exitTypes {
-	"exit" = "exit",
-	"SIGINT" = "SIGINT",
-	"SIGUSR1" = "SIGUSR1",
-	"SIGUSR2" = "SIGUSR2",
-	"SIGTERM" = "SIGTERM"
-}
-
-const gracefulShutdown = (exitType: exitTypes) => {
+const gracefulShutdown = (exitType: exitTypes): void => {
 	bot.destroy();
 	console.log(`Gracefully shutting down the bot with reason '${exitType}'.`);
 	process.exit();
