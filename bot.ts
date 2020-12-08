@@ -57,98 +57,104 @@ function handleDMmessage(message: Discord.Message): void {
 	let messageContent = message.content;
 	const uid = message.author.id;
 	const user = ongoingChats[uid];
-	if (messageContent.startsWith(prefix)) {
-		messageContent = messageContent.slice(prefix.length);
-		if (!user && messageContent !== dmCommands.start)
-			return void message.channel.send(
-				`You haven't started a conversation yet, please type '${prefix}start' first!`
-			);
-		const messageSplit = user ? user[user.currentStatus].split("\n") : undefined;
-		switch (messageContent as dmCommands) {
-			case dmCommands.start:
-				if (!user) {
-					ongoingChats[uid] = {
-						currentStatus: userChatStatuses.YESTERDAY,
-						yesterday: "",
-						today: "",
-						blocks: ""
-					};
-					message.channel.send("What did you do yesterday?");
-				} else {
-					message.channel.send(
-						`You already have started your conversation. Please either type your next item in the list or type '${prefix}end' to finish your report.`
-					);
-				}
-				break;
-			case dmCommands.next:
-				if (user.currentStatus === userChatStatuses.YESTERDAY) {
-					if (!user.yesterday)
-						message.channel.send("You cannot leave yesterday's note empty, please type something.");
-					else {
-						user.currentStatus = userChatStatuses.TODAY;
-						message.channel.send("What will you do today?");
-					}
-				} else if (user.currentStatus === userChatStatuses.TODAY) {
-					if (!user.today)
-						message.channel.send("You cannot leave today's note empty, please type something.");
-					else {
-						user.currentStatus = userChatStatuses.BLOCKS;
-						message.channel.send("Anything that will block you in your work today?");
-					}
-				} else if (user.currentStatus === userChatStatuses.BLOCKS) {
-					if (!user.blocks) user.blocks = "Nothing.";
-					createReportAndSend(message);
-				}
-				break;
-			case dmCommands.end:
-				if (user.currentStatus === userChatStatuses.BLOCKS) {
-					if (!user.blocks) user.blocks = "Nothing";
-					createReportAndSend(message);
-				} else {
-					message.channel.send(
-						`You haven't finished last question. If you have, please type '${prefix}next' to skip to the next question.`
-					);
-				}
-				break;
-			case dmCommands.delete:
-				if (messageSplit && user[user.currentStatus].split("\n").length > 1) {
-					const removed = messageSplit.pop();
-					user[user.currentStatus] = messageSplit.join("\n");
-					message.channel.send(
-						`I have removed line: "${removed}". Please continue or type '${prefix}cancel' to cancel report.`
-					);
-				} else {
-					message.channel.send(
-						"You have nothing to save at the moment. Please type something for your report."
-					);
-				}
-				break;
-			case dmCommands.cancel:
-				delete ongoingChats[uid];
-				message.channel.send(
-					`Successfully cancelled your report. Type '${prefix}start' if you want to start again.`
+	try {
+		if (messageContent.startsWith(prefix)) {
+			messageContent = messageContent.slice(prefix.length);
+			if (!user && messageContent !== dmCommands.start)
+				return void message.channel.send(
+					`You haven't started a conversation yet, please type '${prefix}start' first!`
 				);
-				break;
-		}
-	} else {
-		if (!user) {
-			return void message.channel.send(
-				`You haven't started a conversation yet, please type '${prefix}start' first!`
-			);
+			const messageSplit = user ? user[user.currentStatus].split("\n") : undefined;
+			switch (messageContent as dmCommands) {
+				case dmCommands.start:
+					if (!user) {
+						ongoingChats[uid] = {
+							currentStatus: userChatStatuses.YESTERDAY,
+							yesterday: "",
+							today: "",
+							blocks: ""
+						};
+						message.channel.send("What did you do yesterday?");
+					} else {
+						message.channel.send(
+							`You already have started your conversation. Please either type your next item in the list or type '${prefix}end' to finish your report.`
+						);
+					}
+					break;
+				case dmCommands.next:
+					if (user.currentStatus === userChatStatuses.YESTERDAY) {
+						if (!user.yesterday)
+							message.channel.send("You cannot leave yesterday's note empty, please type something.");
+						else {
+							user.currentStatus = userChatStatuses.TODAY;
+							message.channel.send("What will you do today?");
+						}
+					} else if (user.currentStatus === userChatStatuses.TODAY) {
+						if (!user.today)
+							message.channel.send("You cannot leave today's note empty, please type something.");
+						else {
+							user.currentStatus = userChatStatuses.BLOCKS;
+							message.channel.send("Anything that will block you in your work today?");
+						}
+					} else if (user.currentStatus === userChatStatuses.BLOCKS) {
+						if (!user.blocks) user.blocks = "Nothing.";
+						createReportAndSend(message);
+					}
+					break;
+				case dmCommands.end:
+					if (user.currentStatus === userChatStatuses.BLOCKS) {
+						if (!user.blocks) user.blocks = "Nothing";
+						createReportAndSend(message);
+					} else {
+						message.channel.send(
+							`You haven't finished last question. If you have, please type '${prefix}next' to skip to the next question.`
+						);
+					}
+					break;
+				case dmCommands.delete:
+					if (messageSplit && user[user.currentStatus].split("\n").length > 1) {
+						const removed = messageSplit.pop();
+						user[user.currentStatus] = messageSplit.join("\n");
+						message.channel.send(
+							`I have removed line: "${removed}". Please continue or type '${prefix}cancel' to cancel report.`
+						);
+					} else {
+						message.channel.send(
+							"You have nothing to save at the moment. Please type something for your report."
+						);
+					}
+					break;
+				case dmCommands.cancel:
+					delete ongoingChats[uid];
+					message.channel.send(
+						`Successfully cancelled your report. Type '${prefix}start' if you want to start again.`
+					);
+					break;
+			}
 		} else {
-			messageContent = `${messageContent[0].toUpperCase()}${messageContent.slice(1)}`;
-			messageContent = messageContent.startsWith("-") ? messageContent : `- ${messageContent}`;
-			user[user.currentStatus] += `${messageContent}\n`;
-			return void message.channel.send(
-				`I have recorded this line: "${messageContent}". If you want to add more to ${user.currentStatus}'${
-					user.currentStatus !== userChatStatuses.BLOCKS ? "s" : "" /** Prevent "blocks's" */
-				} list, just type it or type '${prefix}${
-					user.currentStatus === userChatStatuses.BLOCKS
-						? "end' to end your report and get it sent"
-						: "next' to switch to next question"
-				}. You can also type '${prefix}delete' to remove the last line you saved. (Or type '${prefix}cancel' to cancel report.)`
-			);
+			if (!user) {
+				return void message.channel.send(
+					`You haven't started a conversation yet, please type '${prefix}start' first!`
+				);
+			} else {
+				messageContent = `${messageContent[0].toUpperCase()}${messageContent.slice(1)}`;
+				messageContent = messageContent.startsWith("-") ? messageContent : `- ${messageContent}`;
+				user[user.currentStatus] += `${messageContent}\n`;
+				return void message.channel.send(
+					`I have recorded this line: "${messageContent}". If you want to add more to ${user.currentStatus}'${
+						user.currentStatus !== userChatStatuses.BLOCKS ? "s" : "" /** Prevent "blocks's" */
+					} list, just type it or type '${prefix}${
+						user.currentStatus === userChatStatuses.BLOCKS
+							? "end' to end your report and get it sent"
+							: "next' to switch to next question"
+					}. You can also type '${prefix}delete' to remove the last line you saved. (Or type '${prefix}cancel' to cancel report.)`
+				);
+			}
 		}
+	} catch (e) {
+		console.error(e);
+		message.channel.send(`Some error happened. Please contact <@${CONFIG.developerUserId}>`);
+		return;
 	}
 }
 
