@@ -59,6 +59,7 @@ function handleDMmessage(message: Discord.Message): void {
 	const user = ongoingChats[uid];
 	if (messageContent.startsWith(prefix)) {
 		messageContent = messageContent.slice(prefix.length);
+		const messageSplit = user[user.currentStatus].split("\n");
 		if (!user && messageContent !== dmCommands.start)
 			return void message.channel.send(
 				`You haven't started a conversation yet, please type '${prefix}start' first!`
@@ -109,6 +110,31 @@ function handleDMmessage(message: Discord.Message): void {
 					);
 				}
 				break;
+			case dmCommands.delete:
+				if (user[user.currentStatus].split("\n").length > 1) {
+					const removed = messageSplit.pop();
+					user[user.currentStatus] = messageSplit.join("\n");
+					message.channel.send(
+						`I have removed line: "${removed}". Please continue or type '${prefix}cancel' to cancel report.`
+					);
+				} else {
+					message.channel.send(
+						"You have nothing to save at the moment. Please type something for your report."
+					);
+				}
+				break;
+			case dmCommands.cancel:
+				if (user) {
+					delete ongoingChats[uid];
+					message.channel.send(
+						`Successfully cancelled your report. Type '${prefix}start' if you want to start again.`
+					);
+				} else {
+					message.channel.send(
+						`You already don't have an ongoing report. Type '${prefix}start' if you want to start one.`
+					);
+				}
+				break;
 		}
 	} else {
 		if (!user) {
@@ -116,15 +142,17 @@ function handleDMmessage(message: Discord.Message): void {
 				`You haven't started a conversation yet, please type '${prefix}start' first!`
 			);
 		} else {
+			messageContent = `${messageContent[0].toUpperCase()}${messageContent.slice(1)}`;
+			messageContent = messageContent.startsWith("-") ? messageContent : `- ${messageContent}`;
 			user[user.currentStatus] += `${messageContent}\n`;
 			return void message.channel.send(
 				`I have recorded this line: "${messageContent}". If you want to add more to ${user.currentStatus}'${
 					user.currentStatus !== userChatStatuses.BLOCKS ? "s" : "" /** Prevent "blocks's" */
 				} list, just type it or type '${prefix}${
 					user.currentStatus === userChatStatuses.BLOCKS
-						? "end' to end your report and get it sent."
-						: "next' to switch to next question."
-				}`
+						? "end' to end your report and get it sent"
+						: "next' to switch to next question"
+				}. You can also type '${prefix}delete' to remove the last line you saved. (Or type '${prefix}cancel' to cancel report.)`
 			);
 		}
 	}

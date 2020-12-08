@@ -15,5 +15,7 @@ export enum userChatStatuses {
 export enum dmCommands {
 	"start" = "start",
 	"next" = "next",
-	"end" = "end"
+	"end" = "end",
+	"delete" = "delete",
+	"cancel" = "cancel"
 }
