@@ -63,7 +63,7 @@ function handleDMmessage(message: Discord.Message): void {
 			return void message.channel.send(
 				`You haven't started a conversation yet, please type '${prefix}start' first!`
 			);
-		const messageSplit = user[user.currentStatus].split("\n");
+		const messageSplit = user ? user[user.currentStatus].split("\n") : undefined;
 		switch (messageContent as dmCommands) {
 			case dmCommands.start:
 				if (!user) {
@@ -111,7 +111,7 @@ function handleDMmessage(message: Discord.Message): void {
 				}
 				break;
 			case dmCommands.delete:
-				if (user[user.currentStatus].split("\n").length > 1) {
+				if (messageSplit && user[user.currentStatus].split("\n").length > 1) {
 					const removed = messageSplit.pop();
 					user[user.currentStatus] = messageSplit.join("\n");
 					message.channel.send(
