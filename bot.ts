@@ -59,11 +59,11 @@ function handleDMmessage(message: Discord.Message): void {
 	const user = ongoingChats[uid];
 	if (messageContent.startsWith(prefix)) {
 		messageContent = messageContent.slice(prefix.length);
-		const messageSplit = user[user.currentStatus].split("\n");
 		if (!user && messageContent !== dmCommands.start)
 			return void message.channel.send(
 				`You haven't started a conversation yet, please type '${prefix}start' first!`
 			);
+		const messageSplit = user[user.currentStatus].split("\n");
 		switch (messageContent as dmCommands) {
 			case dmCommands.start:
 				if (!user) {
@@ -124,16 +124,10 @@ function handleDMmessage(message: Discord.Message): void {
 				}
 				break;
 			case dmCommands.cancel:
-				if (user) {
-					delete ongoingChats[uid];
-					message.channel.send(
-						`Successfully cancelled your report. Type '${prefix}start' if you want to start again.`
-					);
-				} else {
-					message.channel.send(
-						`You already don't have an ongoing report. Type '${prefix}start' if you want to start one.`
-					);
-				}
+				delete ongoingChats[uid];
+				message.channel.send(
+					`Successfully cancelled your report. Type '${prefix}start' if you want to start again.`
+				);
 				break;
 		}
 	} else {
