@@ -60,11 +60,11 @@ function handleDMmessage(message: Discord.Message): void {
 	try {
 		if (messageContent.startsWith(prefix)) {
 			messageContent = messageContent.slice(prefix.length);
+			const currentStatusSplit = user ? user[user.currentStatus].split("\n") : undefined;
 			if (!user && messageContent !== dmCommands.start)
 				return void message.channel.send(
 					`You haven't started a conversation yet, please type '${prefix}start' first!`
 				);
-			const messageSplit = user ? user[user.currentStatus].split("\n") : undefined;
 			switch (messageContent as dmCommands) {
 				case dmCommands.start:
 					if (!user) {
@@ -97,13 +97,13 @@ function handleDMmessage(message: Discord.Message): void {
 							message.channel.send("Anything that will block you in your work today?");
 						}
 					} else if (user.currentStatus === userChatStatuses.BLOCKS) {
-						if (!user.blocks) user.blocks = "Nothing.";
+						if (!user.blocks) user.blocks = "- Nothing.";
 						createReportAndSend(message);
 					}
 					break;
 				case dmCommands.end:
 					if (user.currentStatus === userChatStatuses.BLOCKS) {
-						if (!user.blocks) user.blocks = "Nothing";
+						if (!user.blocks) user.blocks = "- Nothing";
 						createReportAndSend(message);
 					} else {
 						message.channel.send(
@@ -112,9 +112,9 @@ function handleDMmessage(message: Discord.Message): void {
 					}
 					break;
 				case dmCommands.delete:
-					if (messageSplit && user[user.currentStatus].split("\n").length > 1) {
-						const removed = messageSplit.pop();
-						user[user.currentStatus] = messageSplit.join("\n");
+					if (currentStatusSplit && user[user.currentStatus].split("\n").length > 1) {
+						const removed = currentStatusSplit.pop();
+						user[user.currentStatus] = currentStatusSplit.join("\n");
 						message.channel.send(
 							`I have removed line: "${removed}". Please continue or type '${prefix}cancel' to cancel report.`
 						);
@@ -137,6 +137,16 @@ function handleDMmessage(message: Discord.Message): void {
 					`You haven't started a conversation yet, please type '${prefix}start' first!`
 				);
 			} else {
+				const messageSplit = messageContent.split("\n");
+				if (messageSplit.length > 1) {
+					messageSplit.forEach((line) => {
+						const messageCopy = message;
+						messageCopy.content = line;
+						console.log(messageCopy.content);
+						handleDMmessage(messageCopy);
+					});
+					return;
+				}
 				messageContent = `${messageContent[0].toUpperCase()}${messageContent.slice(1)}`;
 				messageContent = messageContent.startsWith("-") ? messageContent : `- ${messageContent}`;
 				user[user.currentStatus] += `${messageContent}\n`;
