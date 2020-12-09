@@ -142,7 +142,6 @@ function handleDMmessage(message: Discord.Message): void {
 					messageSplit.forEach((line) => {
 						const messageCopy = message;
 						messageCopy.content = line;
-						console.log(messageCopy.content);
 						handleDMmessage(messageCopy);
 					});
 					return;
