@@ -24,7 +24,8 @@ module.exports = {
 				argsIgnorePattern: "^_"
 			}
 		],
-		indent: ["error", "tab", { SwitchCase: 1 }],
+		indent: ["off"], // Conflicts with Prettier.
+		"no-mixed-spaces-and-tabs": ["off"], // Conflicts with Prettier.
 		"linebreak-style": ["error", "unix"],
 		quotes: ["error", "double"],
 		semi: ["error", "always"]
