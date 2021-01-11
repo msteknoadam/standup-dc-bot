@@ -1,6 +1,6 @@
 {
 	"name": "standup-dc-bot",
-	"version": "1.0.0",
+	"version": "2.0.0",
 	"main": "index.js",
 	"repository": "https://github.com/msteknoadam/standup-dc-bot",
 	"author": "msteknoadam <40995274+msteknoadam@users.noreply.github.com>",
