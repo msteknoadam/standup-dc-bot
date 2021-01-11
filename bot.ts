@@ -3,7 +3,7 @@ import { dmCommands, exitTypes, userChatStatuses } from "./types";
 import CONFIG from "./config";
 
 const ongoingChats: {
-	[s: string]: { currentStatus: userChatStatuses; yesterday: string; today: string; blocks: string };
+	[s: string]: { currentStatus: userChatStatuses; yesterday: string[]; today: string[]; blocks: string[] };
 } = {};
 const prefix = CONFIG.commandPrefix;
 
@@ -40,11 +40,11 @@ async function createReportAndSend(userMessage: Discord.Message): Promise<void> 
 			const reportsChat = reportsServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
 			if (reportsChat) {
 				const embedFields: Discord.EmbedField[] = [];
-				embedFields.push({ name: "What did I do yesterday?", value: user.yesterday, inline: false });
-				embedFields.push({ name: "What will I do today?", value: user.today, inline: false });
+				embedFields.push({ name: "What did I do yesterday?", value: user.yesterday.join("\n"), inline: false });
+				embedFields.push({ name: "What will I do today?", value: user.today.join("\n"), inline: false });
 				embedFields.push({
 					name: "Anything that will block me in my work today?",
-					value: user.blocks,
+					value: user.blocks.join("\n"),
 					inline: false
 				});
 				const embed = new Discord.MessageEmbed({
@@ -98,7 +98,6 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 	try {
 		if (messageContent.startsWith(prefix)) {
 			messageContent = messageContent.slice(prefix.length);
-			const currentStatusSplit = user ? user[user.currentStatus].split("\n") : undefined;
 			if (!user && messageContent !== dmCommands.start) {
 				await message.channel.send(
 					`You haven't started a conversation yet, please type '${prefix}start' first!`
@@ -110,9 +109,9 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 					if (!user) {
 						ongoingChats[uid] = {
 							currentStatus: userChatStatuses.YESTERDAY,
-							yesterday: "",
-							today: "",
-							blocks: ""
+							yesterday: [],
+							today: [],
+							blocks: []
 						};
 						await message.channel.send("What did you do yesterday?");
 					} else {
@@ -139,13 +138,13 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 							await message.channel.send("Anything that will block you in your work today?");
 						}
 					} else if (user.currentStatus === userChatStatuses.BLOCKS) {
-						if (!user.blocks) user.blocks = "- Nothing.";
+						if (user.blocks.length === 0) user.blocks = ["- Nothing"];
 						await createReportAndSend(message);
 					}
 					break;
 				case dmCommands.end:
 					if (user.currentStatus === userChatStatuses.BLOCKS) {
-						if (!user.blocks) user.blocks = "- Nothing";
+						if (user.blocks.length === 0) user.blocks = ["- Nothing"];
 						await createReportAndSend(message);
 					} else {
 						await message.channel.send(
@@ -154,15 +153,14 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 					}
 					break;
 				case dmCommands.delete:
-					if (currentStatusSplit && user[user.currentStatus].split("\n").length > 1) {
-						const removed = currentStatusSplit.pop();
-						user[user.currentStatus] = currentStatusSplit.join("\n");
+					if (user[user.currentStatus].length > 0) {
+						const removed = user[user.currentStatus].pop();
 						await message.channel.send(
 							`I have removed line: "${removed}". Please continue or type '${prefix}cancel' to cancel report.`
 						);
 					} else {
 						await message.channel.send(
-							"You have nothing to save at the moment. Please type something for your report."
+							"You haven't added anything to response for your last question. Please type something for your report."
 						);
 					}
 					break;
@@ -191,7 +189,7 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 				}
 				messageContent = `${messageContent[0].toUpperCase()}${messageContent.slice(1)}`;
 				messageContent = messageContent.startsWith("-") ? messageContent : `- ${messageContent}`;
-				user[user.currentStatus] += `${messageContent}\n`;
+				user[user.currentStatus].push(messageContent);
 				await message.channel.send(
 					`I have recorded this line: "${messageContent}". If you want to add more to ${user.currentStatus}'${
 						user.currentStatus !== userChatStatuses.BLOCKS ? "s" : "" /** Prevent "blocks's" */
