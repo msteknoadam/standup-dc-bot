@@ -7,53 +7,91 @@ const ongoingChats: {
 } = {};
 const prefix = CONFIG.commandPrefix;
 
+async function sendErrorMessage(
+	userMessageThatCausedError: Discord.Message,
+	specificError?: { cause: string; code: number; silent?: boolean }
+): Promise<void> {
+	console.error(
+		`Error happened.${
+			specificError ? ` Error details: ${JSON.stringify(specificError)} |||` : ""
+		} User message: ${JSON.stringify(userMessageThatCausedError)}`
+	);
+	// Make sure error cause ends with "." or "!" or "?" so the message to be sent back to user doesn't look like it's coming from someone who doesn't know punctuation rules.
+	if (specificError && !specificError.cause.match(/[.!?]$/)) specificError.cause += ".";
+	return void userMessageThatCausedError.channel.send(
+		`${specificError && !specificError.silent ? specificError.cause : "Unknown error happened."} Please contact <@${
+			CONFIG.developerUserId
+		}> regarding this issue with this code: #${specificError ? `S${specificError.code}` : new Date().getTime()}.` // Error codes starting with S mean that they are special error codes.
+	);
+}
+
 async function createReportAndSend(userMessage: Discord.Message): Promise<void> {
 	userMessage.channel.send("Thanks for your report, I will now send this information to the proper chat.");
 	const uid = userMessage.author.id;
 	const user = ongoingChats[uid];
-	const reportsServer = bot.guilds.cache.find((guild) => guild.id === CONFIG.reportServerId);
-	if (reportsServer) {
-		const reportsChat = reportsServer.channels.cache.get(CONFIG.reportChannelId) as Discord.TextChannel | undefined;
-		if (reportsChat) {
-			const embedFields: Discord.EmbedField[] = [];
-			embedFields.push({ name: "What did I do yesterday?", value: user.yesterday, inline: false });
-			embedFields.push({ name: "What will I do today?", value: user.today, inline: false });
-			embedFields.push({
-				name: "Anything that will block me in my work today?",
-				value: user.blocks,
-				inline: false
-			});
-			const embed = new Discord.MessageEmbed({
-				author: {
-					name: userMessage.author.username,
-					iconURL: userMessage.author.avatarURL() || userMessage.author.defaultAvatarURL
-				},
-				color: Math.floor(Math.random() * 16777215 /** Gets random color each time for each message :) */),
-				fields: embedFields
-			});
-			delete ongoingChats[uid];
-			try {
-				return void (await reportsChat.send(embed));
-			} catch (e) {
-				return void userMessage.channel.send(
-					`There has been an error. Please contact <@${CONFIG.developerUserId}> regarding this issue.`
-				);
+	const reportServers = Object.keys(CONFIG.reportServers);
+	if (reportServers.length === 0) {
+		return sendErrorMessage(userMessage, { cause: "Report servers are not configured", code: 500, silent: true });
+	}
+	reportServers.forEach(async (serverId) => {
+		const reportsServer = bot.guilds.cache.find((guild) => guild.id === serverId);
+		if (reportsServer) {
+			const channelId = CONFIG.reportServers[serverId];
+			const reportsChat = reportsServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
+			if (reportsChat) {
+				const embedFields: Discord.EmbedField[] = [];
+				embedFields.push({ name: "What did I do yesterday?", value: user.yesterday, inline: false });
+				embedFields.push({ name: "What will I do today?", value: user.today, inline: false });
+				embedFields.push({
+					name: "Anything that will block me in my work today?",
+					value: user.blocks,
+					inline: false
+				});
+				const embed = new Discord.MessageEmbed({
+					author: {
+						name: userMessage.author.username,
+						iconURL: userMessage.author.avatarURL() || userMessage.author.defaultAvatarURL
+					},
+					color: Math.floor(Math.random() * 16777215 /** Gets random color each time for each message :) */),
+					fields: embedFields
+				});
+				delete ongoingChats[uid];
+				try {
+					await reportsChat.send(embed);
+					return;
+				} catch (e) {
+					console.error(e);
+					return sendErrorMessage(
+						userMessage,
+						e.message && e.message.includes("Missing Access")
+							? {
+									cause: `Bot doesn't have access to channel '${channelId}' inside server '${serverId}'.`,
+									code: 401,
+									silent: true
+							  }
+							: undefined
+					);
+				}
+			} else {
+				delete ongoingChats[uid];
+				return sendErrorMessage(userMessage, {
+					cause: `Couldn't find the report channel '${channelId}' inside server '${serverId}'. Make sure you set channelId correctly.`,
+					code: 404,
+					silent: true
+				});
 			}
 		} else {
 			delete ongoingChats[uid];
-			return void userMessage.channel.send(
-				`Standup reports server has not been set up. Please contact <@${CONFIG.developerUserId}> regarding this issue.`
-			);
+			return sendErrorMessage(userMessage, {
+				cause: `Couldn't find the report server '${serverId}'. Maybe you forgot to invite bot to that server? `,
+				code: 404,
+				silent: true
+			});
 		}
-	} else {
-		delete ongoingChats[uid];
-		return void userMessage.channel.send(
-			`Standup reports server has not been set up. Please contact <@${CONFIG.developerUserId}> regarding this issue.`
-		);
-	}
+	});
 }
 
-function handleDMmessage(message: Discord.Message): void {
+async function handleDMmessage(message: Discord.Message): Promise<void> {
 	let messageContent = message.content;
 	const uid = message.author.id;
 	const user = ongoingChats[uid];
@@ -61,10 +99,12 @@ function handleDMmessage(message: Discord.Message): void {
 		if (messageContent.startsWith(prefix)) {
 			messageContent = messageContent.slice(prefix.length);
 			const currentStatusSplit = user ? user[user.currentStatus].split("\n") : undefined;
-			if (!user && messageContent !== dmCommands.start)
-				return void message.channel.send(
+			if (!user && messageContent !== dmCommands.start) {
+				await message.channel.send(
 					`You haven't started a conversation yet, please type '${prefix}start' first!`
 				);
+				return;
+			}
 			switch (messageContent as dmCommands) {
 				case dmCommands.start:
 					if (!user) {
@@ -74,9 +114,9 @@ function handleDMmessage(message: Discord.Message): void {
 							today: "",
 							blocks: ""
 						};
-						message.channel.send("What did you do yesterday?");
+						await message.channel.send("What did you do yesterday?");
 					} else {
-						message.channel.send(
+						await message.channel.send(
 							`You already have started your conversation. Please either type your next item in the list or type '${prefix}end' to finish your report.`
 						);
 					}
@@ -84,29 +124,31 @@ function handleDMmessage(message: Discord.Message): void {
 				case dmCommands.next:
 					if (user.currentStatus === userChatStatuses.YESTERDAY) {
 						if (!user.yesterday)
-							message.channel.send("You cannot leave yesterday's note empty, please type something.");
+							await message.channel.send(
+								"You cannot leave yesterday's note empty, please type something."
+							);
 						else {
 							user.currentStatus = userChatStatuses.TODAY;
-							message.channel.send("What will you do today?");
+							await message.channel.send("What will you do today?");
 						}
 					} else if (user.currentStatus === userChatStatuses.TODAY) {
 						if (!user.today)
-							message.channel.send("You cannot leave today's note empty, please type something.");
+							await message.channel.send("You cannot leave today's note empty, please type something.");
 						else {
 							user.currentStatus = userChatStatuses.BLOCKS;
-							message.channel.send("Anything that will block you in your work today?");
+							await message.channel.send("Anything that will block you in your work today?");
 						}
 					} else if (user.currentStatus === userChatStatuses.BLOCKS) {
 						if (!user.blocks) user.blocks = "- Nothing.";
-						createReportAndSend(message);
+						await createReportAndSend(message);
 					}
 					break;
 				case dmCommands.end:
 					if (user.currentStatus === userChatStatuses.BLOCKS) {
 						if (!user.blocks) user.blocks = "- Nothing";
-						createReportAndSend(message);
+						await createReportAndSend(message);
 					} else {
-						message.channel.send(
+						await message.channel.send(
 							`You haven't finished last question. If you have, please type '${prefix}next' to skip to the next question.`
 						);
 					}
@@ -115,27 +157,28 @@ function handleDMmessage(message: Discord.Message): void {
 					if (currentStatusSplit && user[user.currentStatus].split("\n").length > 1) {
 						const removed = currentStatusSplit.pop();
 						user[user.currentStatus] = currentStatusSplit.join("\n");
-						message.channel.send(
+						await message.channel.send(
 							`I have removed line: "${removed}". Please continue or type '${prefix}cancel' to cancel report.`
 						);
 					} else {
-						message.channel.send(
+						await message.channel.send(
 							"You have nothing to save at the moment. Please type something for your report."
 						);
 					}
 					break;
 				case dmCommands.cancel:
 					delete ongoingChats[uid];
-					message.channel.send(
+					await message.channel.send(
 						`Successfully cancelled your report. Type '${prefix}start' if you want to start again.`
 					);
 					break;
 			}
 		} else {
 			if (!user) {
-				return void message.channel.send(
+				await message.channel.send(
 					`You haven't started a conversation yet, please type '${prefix}start' first!`
 				);
+				return;
 			} else {
 				const messageSplit = messageContent.split("\n");
 				if (messageSplit.length > 1) {
@@ -149,7 +192,7 @@ function handleDMmessage(message: Discord.Message): void {
 				messageContent = `${messageContent[0].toUpperCase()}${messageContent.slice(1)}`;
 				messageContent = messageContent.startsWith("-") ? messageContent : `- ${messageContent}`;
 				user[user.currentStatus] += `${messageContent}\n`;
-				return void message.channel.send(
+				await message.channel.send(
 					`I have recorded this line: "${messageContent}". If you want to add more to ${user.currentStatus}'${
 						user.currentStatus !== userChatStatuses.BLOCKS ? "s" : "" /** Prevent "blocks's" */
 					} list, just type it or type '${prefix}${
@@ -158,11 +201,12 @@ function handleDMmessage(message: Discord.Message): void {
 							: "next' to switch to next question"
 					}. You can also type '${prefix}delete' to remove the last line you saved. (Or type '${prefix}cancel' to cancel report.)`
 				);
+				return;
 			}
 		}
 	} catch (e) {
 		console.error(e);
-		message.channel.send(`Some error happened. Please contact <@${CONFIG.developerUserId}>`);
+		await sendErrorMessage(message);
 		return;
 	}
 }
@@ -185,20 +229,25 @@ bot.on("error", async (error) => {
 	console.error(error);
 });
 
-bot.on("message", (message): void => {
-	if (message.author.bot) return;
-	if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
-		// Dev tool to let developer run commands live.
-		try {
-			const response = eval(message.content.slice(`${prefix}eval`.length));
-			return void message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
-		} catch (err) {
-			return void message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
-		}
-	} else if (message.channel.type === "dm") {
-		return handleDMmessage(message);
-	} // No need to handle other cases since this bot only checks DM messages and then sends message by itself.
-});
+bot.on(
+	"message",
+	async (message): Promise<void> => {
+		if (message.author.bot) return;
+		if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
+			// Dev tool to let developer run commands live.
+			try {
+				const response = eval(message.content.slice(`${prefix}eval`.length));
+				await message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
+				return;
+			} catch (err) {
+				message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
+				return;
+			}
+		} else if (message.channel.type === "dm") {
+			return handleDMmessage(message);
+		} // No need to handle other cases since this bot only checks DM messages and then sends message by itself.
+	}
+);
 
 bot.login(CONFIG.DISCORD_TOKEN);
 

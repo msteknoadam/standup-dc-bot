@@ -1,3 +1,10 @@
+export interface ConfigType {
+	DISCORD_TOKEN: string;
+	commandPrefix: string;
+	reportServers: { [serverId: string]: string }; // { server1Id: channel1Id, server2Id: channel2-1Id, server2Id: channel2-2Id }
+	developerUserId: string;
+}
+
 export enum exitTypes {
 	"exit" = "exit",
 	"SIGINT" = "SIGINT",
