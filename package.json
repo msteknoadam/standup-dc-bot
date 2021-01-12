@@ -21,6 +21,7 @@
 		"typescript": "^4.1.2"
 	},
 	"scripts": {
+		"preinstall": "node enforce-yarn.js",
 		"dev": "nodemon bot.ts",
 		"start": "ts-node bot.ts",
 		"ci-check": "yarn lint && tsc --noEmit",
