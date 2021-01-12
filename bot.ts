@@ -33,29 +33,29 @@ async function createReportAndSend(userMessage: Discord.Message): Promise<void> 
 	if (reportServers.length === 0) {
 		return sendErrorMessage(userMessage, { cause: "Report servers are not configured", code: 500, silent: true });
 	}
+	const embedFields: Discord.EmbedField[] = [];
+	embedFields.push({ name: "What did I do yesterday?", value: user.yesterday.join("\n"), inline: false });
+	embedFields.push({ name: "What will I do today?", value: user.today.join("\n"), inline: false });
+	embedFields.push({
+		name: "Anything that will block me in my work today?",
+		value: user.blocks.join("\n"),
+		inline: false
+	});
+	const embed = new Discord.MessageEmbed({
+		author: {
+			name: userMessage.author.username,
+			iconURL: userMessage.author.avatarURL() || userMessage.author.defaultAvatarURL
+		},
+		color: Math.floor(Math.random() * 16777215 /** Gets random color each time for each message :) */),
+		fields: embedFields
+	});
+	delete ongoingChats[uid];
 	reportServers.forEach(async (serverId) => {
 		const reportsServer = bot.guilds.cache.find((guild) => guild.id === serverId);
 		if (reportsServer) {
 			const channelId = CONFIG.reportServers[serverId];
 			const reportsChat = reportsServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
 			if (reportsChat) {
-				const embedFields: Discord.EmbedField[] = [];
-				embedFields.push({ name: "What did I do yesterday?", value: user.yesterday.join("\n"), inline: false });
-				embedFields.push({ name: "What will I do today?", value: user.today.join("\n"), inline: false });
-				embedFields.push({
-					name: "Anything that will block me in my work today?",
-					value: user.blocks.join("\n"),
-					inline: false
-				});
-				const embed = new Discord.MessageEmbed({
-					author: {
-						name: userMessage.author.username,
-						iconURL: userMessage.author.avatarURL() || userMessage.author.defaultAvatarURL
-					},
-					color: Math.floor(Math.random() * 16777215 /** Gets random color each time for each message :) */),
-					fields: embedFields
-				});
-				delete ongoingChats[uid];
 				try {
 					await reportsChat.send(embed);
 					return;
