@@ -2,11 +2,24 @@ import * as Discord from "discord.js";
 import { dmCommands, exitTypes, userChatStatuses } from "./types";
 import CONFIG from "./config";
 
+let lastPosted = new Date();
+
+function sleep(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function checkIfCanPost() {
+	const now = new Date();
+	// posts once a week
+	const isMonday = now.getDay() == 1;
+	return isMonday && lastPosted.getDate() !== now.getDate();
+}
+
 const ongoingChats: {
 	[s: string]: { currentStatus: userChatStatuses; yesterday: string[]; today: string[]; blocks: string[] };
 } = {};
 const prefix = CONFIG.commandPrefix;
-
+let ongoingMessages: Discord.MessageEmbed[] = [];
 async function sendErrorMessage(
 	userMessageThatCausedError: Discord.Message,
 	specificError?: { cause: string; code: number; silent?: boolean }
@@ -209,10 +222,69 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 	}
 }
 
+async function handlePublicMsg(message: Discord.Message): Promise<void> {
+	let messageContent = message.content;
+	if (!messageContent.startsWith(prefix)) {
+		return;
+	}
+	const args = messageContent.slice(1).split(" ");
+	const shifted = args.shift();
+	if (!shifted) return;
+	const cmd = shifted.toLowerCase();
+
+	switch (cmd) {
+		case "add":
+			const embedFields = [];
+			embedFields.push({ name: "I noted: ", value: args.join(" "), inline: false });
+			embedFields.push({ name: "Date ", value: new Date(), inline: false });
+
+			const embed = new Discord.MessageEmbed({
+				author: {
+					name: message.author.username,
+					iconURL: message.author.avatarURL() || message.author.defaultAvatarURL
+				},
+				color: Math.floor(Math.random() * 16777215),
+				fields: embedFields
+			});
+
+			ongoingMessages.push(embed);
+			break;
+
+		case "get":
+			ongoingMessages.map((el) => message.channel.send(el));
+			break;
+		case "delete":
+			const index = +args[0];
+			if (isNaN(index)) return;
+			if (ongoingMessages.length - 1 < index) return;
+			ongoingMessages.splice(index, 1);
+			break;
+	}
+}
 const bot = new Discord.Client();
 
-bot.on("ready", () => {
+bot.on("ready", async () => {
 	console.log("Bot has successfully logged in.");
+	while (true) {
+		await sleep(5 * 60 * 1000);
+		if (checkIfCanPost()) {
+			const reportServers = Object.keys(CONFIG.reportServers);
+
+			reportServers.forEach(async (serverId) => {
+				const reportsServer = bot.guilds.cache.find((guild) => guild.id === serverId);
+				if (reportsServer) {
+					const channelId = CONFIG.reportServers[serverId];
+					const reportsChat = reportsServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
+					if (reportsChat) {
+						ongoingMessages.map((el) => reportsChat.send(el));
+					}
+				}
+			});
+
+			lastPosted = new Date();
+			ongoingMessages = [];
+		}
+	}
 });
 
 bot.on("reconnecting", async () => {
@@ -231,6 +303,7 @@ bot.on(
 	"message",
 	async (message): Promise<void> => {
 		if (message.author.bot) return;
+
 		if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
 			// Dev tool to let developer run commands live.
 			try {
@@ -241,9 +314,27 @@ bot.on(
 				message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
 				return;
 			}
-		} else if (message.channel.type === "dm") {
-			return handleDMmessage(message);
-		} // No need to handle other cases since this bot only checks DM messages and then sends message by itself.
+		}
+
+		if (message.channel.type !== "dm") {
+			return handlePublicMsg(message);
+		}
+		return handleDMmessage(message);
+		/*
+		if (message.author.bot) return;
+		if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
+			// Dev tool to let developer run commands live.
+			try {
+				const response = eval(message.content.slice(`${prefix}eval`.length));
+				await message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
+				return;
+			} catch (err) {
+				message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
+				return;
+			}
+		} else 
+		*/
+		// No need to handle other cases since this bot only checks DM messages and then sends message by itself.
 	}
 );
 
