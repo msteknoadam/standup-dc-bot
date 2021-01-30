@@ -4,11 +4,11 @@ import CONFIG from "./config";
 
 let lastPosted = new Date();
 
-function sleep(ms: number) {
+function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function checkIfCanPost() {
+function checkIfCanPost(): boolean {
 	const now = new Date();
 	// posts once a week
 	const isMonday = now.getDay() == 1;
@@ -223,7 +223,7 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 }
 
 async function handlePublicMsg(message: Discord.Message): Promise<void> {
-	let messageContent = message.content;
+	const messageContent = message.content;
 	if (!messageContent.startsWith(prefix)) {
 		return;
 	}
@@ -233,7 +233,7 @@ async function handlePublicMsg(message: Discord.Message): Promise<void> {
 	const cmd = shifted.toLowerCase();
 
 	switch (cmd) {
-		case "add":
+		case "add": {
 			const embedFields = [];
 			embedFields.push({ name: "I noted: ", value: args.join(" "), inline: false });
 			embedFields.push({ name: "Date ", value: new Date(), inline: false });
@@ -249,16 +249,17 @@ async function handlePublicMsg(message: Discord.Message): Promise<void> {
 
 			ongoingMessages.push(embed);
 			break;
-
+		}
 		case "get":
 			ongoingMessages.map((el) => message.channel.send(el));
 			break;
-		case "delete":
+		case "delete": {
 			const index = +args[0];
 			if (isNaN(index)) return;
 			if (ongoingMessages.length - 1 < index) return;
 			ongoingMessages.splice(index, 1);
 			break;
+		}
 	}
 }
 const bot = new Discord.Client();
