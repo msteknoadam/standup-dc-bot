@@ -1,25 +1,14 @@
 import * as Discord from "discord.js";
 import { dmCommands, exitTypes, userChatStatuses } from "./types";
+import { cloneDeep } from "lodash"; // God bless me for this...
 import CONFIG from "./config";
-
-let lastPosted = new Date();
-
-function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function checkIfCanPost(): boolean {
-	const now = new Date();
-	// posts once a week
-	const isMonday = now.getDay() == 1;
-	return isMonday && lastPosted.getDate() !== now.getDate();
-}
 
 const ongoingChats: {
 	[s: string]: { currentStatus: userChatStatuses; yesterday: string[]; today: string[]; blocks: string[] };
 } = {};
 const prefix = CONFIG.commandPrefix;
 let ongoingMessages: Discord.MessageEmbed[] = [];
+
 async function sendErrorMessage(
 	userMessageThatCausedError: Discord.Message,
 	specificError?: { cause: string; code: number; silent?: boolean }
@@ -234,6 +223,10 @@ async function handlePublicMsg(message: Discord.Message): Promise<void> {
 
 	switch (cmd) {
 		case "add": {
+			if (args.join(" ").length === 0)
+				return void message.channel.send(
+					`Please type the command in the following format (without <>):\n ${prefix}add <Note to remind>`
+				);
 			const embedFields = [];
 			embedFields.push({ name: "I noted: ", value: args.join(" "), inline: false });
 			embedFields.push({ name: "Date ", value: new Date(), inline: false });
@@ -248,16 +241,37 @@ async function handlePublicMsg(message: Discord.Message): Promise<void> {
 			});
 
 			ongoingMessages.push(embed);
+			message.channel.send(embed);
 			break;
 		}
 		case "get":
-			ongoingMessages.map((el) => message.channel.send(el));
+			if (ongoingMessages.length > 0)
+				ongoingMessages.forEach((msg, index) => {
+					const msgCopy = cloneDeep(msg);
+					msgCopy.fields = [{ name: "ID", value: index.toString(), inline: false }, ...msg.fields];
+					message.channel.send(msgCopy);
+				});
+			else message.channel.send("There are no saved notes yet.");
 			break;
 		case "delete": {
 			const index = +args[0];
-			if (isNaN(index)) return;
-			if (ongoingMessages.length - 1 < index) return;
+			if (isNaN(index))
+				return void message.channel.send(
+					`Please type the command in the following format (without <>):\n ${prefix}delete <index>`
+				);
+			if (ongoingMessages.length - 1 < index)
+				return void message.channel.send(`There are no notes with ID ${index}`);
+			const messageToRemove = ongoingMessages[index];
+			if (!messageToRemove) return void message.channel.send(`There are no notes with ID ${index}`);
 			ongoingMessages.splice(index, 1);
+			const msgCopy = cloneDeep(messageToRemove);
+			msgCopy.author = {
+				name: `Removed By: ${message.author.username} | Added By: ${
+					msgCopy.author ? msgCopy.author.name || "Unknown" : "Unknown"
+				}`,
+				iconURL: message.author.avatarURL() || message.author.defaultAvatarURL
+			};
+			message.channel.send(msgCopy);
 			break;
 		}
 	}
@@ -266,26 +280,37 @@ const bot = new Discord.Client();
 
 bot.on("ready", async () => {
 	console.log("Bot has successfully logged in.");
-	while (true) {
-		await sleep(5 * 60 * 1000);
-		if (checkIfCanPost()) {
-			const reportServers = Object.keys(CONFIG.reportServers);
+	const monday = new Date();
+	monday.setUTCDate(monday.getUTCDate() + ((1 + 7 - monday.getUTCDay()) % 7)); // Set date to monday
+	monday.setUTCHours(10); // Set hour to exactly 10AM UTC
+	monday.setUTCMinutes(0);
+	monday.setUTCSeconds(0);
+	monday.setUTCMilliseconds(0);
+	const timeUntilMonday = monday.getTime() - new Date().getTime();
+	console.log(`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${monday})`);
+	setTimeout(() => {
+		const standupServers = Object.keys(CONFIG.standupServers);
 
-			reportServers.forEach(async (serverId) => {
-				const reportsServer = bot.guilds.cache.find((guild) => guild.id === serverId);
-				if (reportsServer) {
-					const channelId = CONFIG.reportServers[serverId];
-					const reportsChat = reportsServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
-					if (reportsChat) {
-						ongoingMessages.map((el) => reportsChat.send(el));
-					}
+		standupServers.forEach(async (serverId) => {
+			const standupServer = bot.guilds.cache.find((guild) => guild.id === serverId);
+			if (standupServer) {
+				const channelId = CONFIG.standupServers[serverId];
+				const standupChat = standupServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
+				if (standupChat) {
+					standupChat.send(
+						`StandUp time <@&${standupServer.roles.everyone.id}>! ${
+							ongoingMessages.length > 0
+								? "Now I will send the notes you wanted me to remind."
+								: "There are no notes for me to remind."
+						}`
+					);
+					if (ongoingMessages.length > 0) ongoingMessages.forEach((msg) => standupChat.send(msg));
 				}
-			});
+			}
+		});
 
-			lastPosted = new Date();
-			ongoingMessages = [];
-		}
-	}
+		ongoingMessages = [];
+	}, timeUntilMonday);
 });
 
 bot.on("reconnecting", async () => {

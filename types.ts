@@ -1,7 +1,8 @@
 export interface ConfigType {
 	DISCORD_TOKEN: string;
 	commandPrefix: string;
-	reportServers: { [serverId: string]: string }; // { server1Id: channel1Id, server2Id: channel2-1Id, server2Id: channel2-2Id }
+	reportServers: { [serverId: string]: string }; // { server1Id: reportChannel1Id, server2Id: reportChannel2-1Id, server2Id: reportChannel2-2Id }
+	standupServers: { [serverId: string]: string }; // { server1Id: standupChannel1Id, server2Id: standupChannel2-1Id, server2Id: standupChannel2-2Id }
 	developerUserId: string;
 }
 
