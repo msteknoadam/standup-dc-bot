@@ -25,5 +25,6 @@ export enum dmCommands {
 	"next" = "next",
 	"end" = "end",
 	"delete" = "delete",
-	"cancel" = "cancel"
+	"cancel" = "cancel",
+	"notes" = "notes"
 }

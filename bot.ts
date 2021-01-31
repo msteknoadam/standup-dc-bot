@@ -100,7 +100,12 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 	try {
 		if (messageContent.startsWith(prefix)) {
 			messageContent = messageContent.slice(prefix.length);
-			if (!user && messageContent !== dmCommands.start) {
+			if (messageContent.startsWith(dmCommands.notes)) {
+				message.content = message.content.slice(dmCommands.notes.length + 1); // + 1 for space character
+				if (message.content.length === 0)
+					return void message.channel.send(`Please use a notes command. Example:\n ${prefix}notes get`);
+				return handleNotes(message);
+			} else if (!user && messageContent !== dmCommands.start) {
 				await message.channel.send(
 					`You haven't started a conversation yet, please type '${prefix}start' first!`
 				);
@@ -211,11 +216,8 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 	}
 }
 
-async function handlePublicMsg(message: Discord.Message): Promise<void> {
+async function handleNotes(message: Discord.Message): Promise<void> {
 	const messageContent = message.content;
-	if (!messageContent.startsWith(prefix)) {
-		return;
-	}
 	const args = messageContent.slice(1).split(" ");
 	const shifted = args.shift();
 	if (!shifted) return;
@@ -342,24 +344,7 @@ bot.on(
 			}
 		}
 
-		if (message.channel.type !== "dm") {
-			return handlePublicMsg(message);
-		}
-		return handleDMmessage(message);
-		/*
-		if (message.author.bot) return;
-		if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
-			// Dev tool to let developer run commands live.
-			try {
-				const response = eval(message.content.slice(`${prefix}eval`.length));
-				await message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
-				return;
-			} catch (err) {
-				message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
-				return;
-			}
-		} else 
-		*/
+		if (message.channel.type === "dm") return handleDMmessage(message);
 		// No need to handle other cases since this bot only checks DM messages and then sends message by itself.
 	}
 );
