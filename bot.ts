@@ -1,13 +1,15 @@
 import * as Discord from "discord.js";
 import { dmCommands, exitTypes, userChatStatuses } from "./types";
-import { cloneDeep } from "lodash"; // God bless me for this...
+import Datastore from "nedb";
+import path from "path";
 import CONFIG from "./config";
+import { getTimeUntilMonday } from "./util";
 
+const notesDB = new Datastore({ filename: path.join(__dirname, "StandupNotes.db"), autoload: true });
 const ongoingChats: {
 	[s: string]: { currentStatus: userChatStatuses; yesterday: string[]; today: string[]; blocks: string[] };
 } = {};
 const prefix = CONFIG.commandPrefix;
-let ongoingMessages: Discord.MessageEmbed[] = [];
 
 async function sendErrorMessage(
 	userMessageThatCausedError: Discord.Message,
@@ -233,86 +235,141 @@ async function handleNotes(message: Discord.Message): Promise<void> {
 			embedFields.push({ name: "I noted: ", value: args.join(" "), inline: false });
 			embedFields.push({ name: "Date ", value: new Date(), inline: false });
 
-			const embed = new Discord.MessageEmbed({
+			const embedData = {
 				author: {
 					name: message.author.username,
 					iconURL: message.author.avatarURL() || message.author.defaultAvatarURL
 				},
 				color: Math.floor(Math.random() * 16777215),
 				fields: embedFields
-			});
+			};
 
-			ongoingMessages.push(embed);
-			message.channel.send(embed);
+			notesDB.insert(embedData, (err) => {
+				// Do not insert embed because it includes some other functions etc. which are not needed to be stored in db.
+				if (err) {
+					console.error(
+						`Error while inserting note. Stringified note: '${JSON.stringify(embedData)}' . Error: `,
+						err
+					);
+					return void message.channel.send("There was an error while saving your note. Please try again.");
+				}
+
+				return message.channel.send(new Discord.MessageEmbed(embedData));
+			});
 			break;
 		}
-		case "get":
-			if (ongoingMessages.length > 0)
-				ongoingMessages.forEach((msg, index) => {
-					const msgCopy = cloneDeep(msg);
-					msgCopy.fields = [{ name: "ID", value: index.toString(), inline: false }, ...msg.fields];
-					message.channel.send(msgCopy);
+		case "get": {
+			notesDB
+				.find({})
+				.sort({ "fields.1.value": 1 })
+				.exec((err, currentNotes) => {
+					if (err) {
+						console.error("Error while running db.find.sort.exec on 'notes get' command. Error: ", err);
+						return void message.channel.send("An unexpected error occured, please try again later.");
+					}
+
+					if (currentNotes.length > 0) {
+						currentNotes.forEach((msg) => {
+							const msgClone = { ...msg };
+							msgClone.fields = [{ name: "ID", value: msg._id, inline: false }, ...msg.fields];
+							message.channel.send(new Discord.MessageEmbed(msgClone));
+						});
+						return;
+					} else {
+						return void message.channel.send("There are no saved notes yet.");
+					}
 				});
-			else message.channel.send("There are no saved notes yet.");
 			break;
+		}
 		case "delete": {
-			const index = +args[0];
-			if (isNaN(index))
-				return void message.channel.send(
-					`Please type the command in the following format (without <>):\n ${prefix}delete <index>`
-				);
-			if (ongoingMessages.length - 1 < index)
-				return void message.channel.send(`There are no notes with ID ${index}`);
-			const messageToRemove = ongoingMessages[index];
-			if (!messageToRemove) return void message.channel.send(`There are no notes with ID ${index}`);
-			ongoingMessages.splice(index, 1);
-			const msgCopy = cloneDeep(messageToRemove);
-			msgCopy.author = {
-				name: `Removed By: ${message.author.username} | Added By: ${
-					msgCopy.author ? msgCopy.author.name || "Unknown" : "Unknown"
-				}`,
-				iconURL: message.author.avatarURL() || message.author.defaultAvatarURL
-			};
-			message.channel.send(msgCopy);
+			const index = args[0];
+			notesDB.findOne({ _id: index }, (err, messageToRemove) => {
+				if (err) {
+					console.error(`Error while finding note to delete. Requested id was '${index}'. Error: `, err);
+					return void message.channel.send("Some unexpected error happened. Please try again.");
+				}
+
+				if (!messageToRemove) return void message.channel.send(`There are no messages with ID ${index}`);
+
+				return notesDB.remove({ _id: index }, {}, (err) => {
+					if (err) {
+						console.error(`Error while finding note to delete. Requested id was '${index}'. Error: `, err);
+						return void message.channel.send("Some unexpected error happened. Please try again.");
+					}
+
+					messageToRemove.author = {
+						name: `Removed By: ${message.author.username} | Added By: ${
+							messageToRemove.author ? messageToRemove.author.name || "Unknown" : "Unknown"
+						}`,
+						iconURL: message.author.avatarURL() || message.author.defaultAvatarURL
+					};
+					return void message.channel.send(new Discord.MessageEmbed(messageToRemove));
+				});
+			});
 			break;
 		}
 	}
 }
+
+function sendMondayStandupNotes(): void {
+	const standupServers = Object.keys(CONFIG.standupServers);
+
+	standupServers.forEach(async (serverId) => {
+		const standupServer = bot.guilds.cache.find((guild) => guild.id === serverId);
+		if (standupServer) {
+			const channelId = CONFIG.standupServers[serverId];
+			const standupChat = standupServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
+			if (standupChat) {
+				notesDB
+					.find({})
+					.sort({ "fields.1.value": 1 })
+					.exec((err, notes) => {
+						if (err) {
+							console.error(
+								"Error while running db.find.sort.exec on 'sendMondayStandupNotes' function. Error: ",
+								err
+							);
+							setTimeout(sendMondayStandupNotes, 5 * 60 * 1000);
+							return void standupChat.send(
+								`StandUp time <@&${standupServer.roles.everyone.id}>! Some error occured while I was trying to send notes for monday standup so I will be trying to send them again in 5 minutes.`
+							);
+						}
+
+						standupChat.send(
+							`StandUp time <@&${standupServer.roles.everyone.id}>! ${
+								notes.length > 0
+									? "Now I will send the notes you wanted me to remind."
+									: "There are no notes for me to remind."
+							}`
+						);
+						if (notes.length > 0) notes.forEach((msg) => standupChat.send(new Discord.MessageEmbed(msg)));
+
+						notesDB.remove({}, { multi: true }); // Remove all notes so they are not sent again.
+						const timeUntilMonday = getTimeUntilMonday();
+						console.log(
+							`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(
+								2
+							)} minutes. (At ${new Date(new Date().getTime() + timeUntilMonday)})`
+						);
+						setTimeout(sendMondayStandupNotes, timeUntilMonday);
+						return;
+					});
+			}
+		}
+	});
+}
+
 const bot = new Discord.Client();
 
 bot.on("ready", async () => {
 	console.log("Bot has successfully logged in.");
-	const monday = new Date();
-	monday.setUTCDate(monday.getUTCDate() + ((1 + 7 - monday.getUTCDay()) % 7)); // Set date to monday
-	monday.setUTCHours(10); // Set hour to exactly 10AM UTC
-	monday.setUTCMinutes(0);
-	monday.setUTCSeconds(0);
-	monday.setUTCMilliseconds(0);
-	const timeUntilMonday = monday.getTime() - new Date().getTime();
-	console.log(`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${monday})`);
-	setTimeout(() => {
-		const standupServers = Object.keys(CONFIG.standupServers);
-
-		standupServers.forEach(async (serverId) => {
-			const standupServer = bot.guilds.cache.find((guild) => guild.id === serverId);
-			if (standupServer) {
-				const channelId = CONFIG.standupServers[serverId];
-				const standupChat = standupServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
-				if (standupChat) {
-					standupChat.send(
-						`StandUp time <@&${standupServer.roles.everyone.id}>! ${
-							ongoingMessages.length > 0
-								? "Now I will send the notes you wanted me to remind."
-								: "There are no notes for me to remind."
-						}`
-					);
-					if (ongoingMessages.length > 0) ongoingMessages.forEach((msg) => standupChat.send(msg));
-				}
-			}
-		});
-
-		ongoingMessages = [];
-	}, timeUntilMonday);
+	const timeUntilMonday = getTimeUntilMonday();
+	console.log(
+		`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${new Date(
+			new Date().getTime() + timeUntilMonday
+		)})`
+	);
+	setTimeout(sendMondayStandupNotes, timeUntilMonday);
 });
 
 bot.on("reconnecting", async () => {

@@ -105,3 +105,6 @@ dist
 
 ts_build/
 *.local.*
+
+# Local mini database files
+*.db
