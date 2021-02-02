@@ -1,9 +1,9 @@
 import * as Discord from "discord.js";
-import { dmCommands, exitTypes, OngoingChats, userChatStatuses } from "./types";
+import { dmCommands, exitTypes, notesCommands, OngoingChats, userChatStatuses } from "./types";
 import Datastore from "nedb";
 import path from "path";
 import CONFIG from "./config";
-import { getTimeUntilMonday, sendErrorMessage } from "./util";
+import { dailyStatusChange, getTimeUntilMonday, sendErrorMessage } from "./util";
 
 const notesDB = new Datastore({ filename: path.join(__dirname, "StandupNotes.db"), autoload: true });
 const ongoingChats: OngoingChats = {};
@@ -77,18 +77,20 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 	let messageContent = message.content;
 	const uid = message.author.id;
 	const user = ongoingChats[uid];
+	const notStartedInfoMessage = `You haven't started a conversation yet, please type \`\`\`${prefix}start\`\`\` first to start reporting your daily status or \`\`\`${prefix}notes help\`\`\` to learn how to use notes.`;
 	try {
 		if (messageContent.startsWith(prefix)) {
 			messageContent = messageContent.slice(prefix.length);
 			if (messageContent.startsWith(dmCommands.notes)) {
 				message.content = message.content.slice(dmCommands.notes.length + 1); // + 1 for space character
-				if (message.content.length === 0)
-					return void message.channel.send(`Please use a notes command. Example:\n ${prefix}notes get`);
+				if (message.content.length === 0) {
+					return void message.channel.send(
+						`Please specify a notes command. If you don't know how to use notes, please type: \`\`\`${prefix}notes help\`\`\``
+					);
+				}
 				return handleNotes(message);
 			} else if (!user && messageContent !== dmCommands.start) {
-				await message.channel.send(
-					`You haven't started a conversation yet, please type '${prefix}start' first!`
-				);
+				await message.channel.send(notStartedInfoMessage);
 				return;
 			}
 			switch (messageContent as dmCommands) {
@@ -103,7 +105,7 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 						await message.channel.send("What did you do yesterday?");
 					} else {
 						await message.channel.send(
-							`You already have started your conversation. Please either type your next item in the list or type '${prefix}end' to finish your report.`
+							`You already have started your conversation. Please either type your next item in the list or type \`\`\`${prefix}end\`\`\` to finish your report.`
 						);
 					}
 					break;
@@ -135,15 +137,21 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 						await createReportAndSend(message);
 					} else {
 						await message.channel.send(
-							`You haven't finished last question. If you have, please type '${prefix}next' to skip to the next question.`
+							`You haven't finished last question. If you have, please type \`\`\`${prefix}next\`\`\` to skip to the next question.`
 						);
 					}
 					break;
 				case dmCommands.delete:
 					if (user[user.currentStatus].length > 0) {
 						const removed = user[user.currentStatus].pop();
+						if (!removed) return;
 						await message.channel.send(
-							`I have removed line: "${removed}". Please continue or type '${prefix}cancel' to cancel report.`
+							dailyStatusChange("deleted", user, removed, {
+								delete: true,
+								addMore: true,
+								next: true,
+								cancel: true
+							})
 						);
 					} else {
 						await message.channel.send(
@@ -154,15 +162,13 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 				case dmCommands.cancel:
 					delete ongoingChats[uid];
 					await message.channel.send(
-						`Successfully cancelled your report. Type '${prefix}start' if you want to start again.`
+						`Successfully cancelled your report. Type \`\`\`${prefix}start\`\`\` if you want to start again.`
 					);
 					break;
 			}
 		} else {
 			if (!user) {
-				await message.channel.send(
-					`You haven't started a conversation yet, please type '${prefix}start' first!`
-				);
+				await message.channel.send(notStartedInfoMessage);
 				return;
 			} else {
 				const messageSplit = messageContent.split("\n");
@@ -177,14 +183,14 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 				messageContent = `${messageContent[0].toUpperCase()}${messageContent.slice(1)}`;
 				messageContent = messageContent.startsWith("-") ? messageContent : `- ${messageContent}`;
 				user[user.currentStatus].push(messageContent);
+
 				await message.channel.send(
-					`I have recorded this line: "${messageContent}". If you want to add more to ${user.currentStatus}'${
-						user.currentStatus !== userChatStatuses.BLOCKS ? "s" : "" /** Prevent "blocks's" */
-					} list, just type it or type '${prefix}${
-						user.currentStatus === userChatStatuses.BLOCKS
-							? "end' to end your report and get it sent"
-							: "next' to switch to next question"
-					}. You can also type '${prefix}delete' to remove the last line you saved. (Or type '${prefix}cancel' to cancel report.)`
+					dailyStatusChange("recorded", user, messageContent, {
+						delete: true,
+						addMore: true,
+						next: true,
+						cancel: true
+					})
 				);
 				return;
 			}
@@ -203,11 +209,21 @@ async function handleNotes(message: Discord.Message): Promise<void> {
 	if (!shifted) return;
 	const cmd = shifted.toLowerCase();
 
-	switch (cmd) {
-		case "add": {
+	switch (cmd as notesCommands) {
+		case "help": {
+			return void message.channel.send(
+				`\`\`\`
+To add a new note -> ${prefix}notes add Your note here
+To list current notes -> ${prefix}notes list
+To delete one of the notes (You can see IDs of notes when you use list command) -> ${prefix}notes delete id\`\`\``
+			);
+		}
+		case "add":
+		case "new":
+		case "write": {
 			if (args.join(" ").length === 0) {
 				return void message.channel.send(
-					`Please type the command in the following format (without <>):\n ${prefix}add <Note to remind>`
+					`Please type the command in the following format: \`\`\`${prefix}notes add Your note here\`\`\``
 				);
 			}
 			const embedFields = [];
@@ -237,7 +253,8 @@ async function handleNotes(message: Discord.Message): Promise<void> {
 			});
 			break;
 		}
-		case "get": {
+		case "get":
+		case "list": {
 			notesDB
 				.find({})
 				.sort({ "fields.1.value": 1 })
@@ -258,7 +275,8 @@ async function handleNotes(message: Discord.Message): Promise<void> {
 				});
 			break;
 		}
-		case "delete": {
+		case "delete":
+		case "remove": {
 			const index = args[0];
 			notesDB.findOne({ _id: index }, (err, messageToRemove) => {
 				if (err) {
@@ -284,6 +302,11 @@ async function handleNotes(message: Discord.Message): Promise<void> {
 				});
 			});
 			break;
+		}
+		default: {
+			return void message.channel.send(
+				`Unknown notes command '**${cmd}**'. Please use this command if you don't know how to use notes: \`\`\`${prefix}notes help\`\`\``
+			);
 		}
 	}
 }

@@ -29,6 +29,17 @@ export enum dmCommands {
 	"notes" = "notes"
 }
 
+export enum notesCommands {
+	"help" = "help",
+	"add" = "add",
+	"new" = "new", // alias for add
+	"write" = "write", // alias for add
+	"get" = "get",
+	"list" = "list", // alias for get
+	"delete" = "delete",
+	"remove" = "remove" // alias for delete
+}
+
 export interface OngoingChats {
-	[s: string]: { currentStatus: userChatStatuses; yesterday: string[]; today: string[]; blocks: string[] };
+	[userId: string]: { currentStatus: userChatStatuses; yesterday: string[]; today: string[]; blocks: string[] };
 }

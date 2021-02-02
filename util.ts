@@ -1,5 +1,8 @@
 import * as Discord from "discord.js";
 import CONFIG from "./config";
+import { OngoingChats, userChatStatuses } from "./types";
+
+const prefix = CONFIG.commandPrefix;
 
 /** Returns time until next monday in ms
  * @param mockMonday If set to true, the function will return 120 seconds instead of time until next monday. Useful while testing on local.
@@ -30,4 +33,37 @@ export async function sendErrorMessage(
 			CONFIG.developerUserId
 		}> regarding this issue with this code: #${specificError ? `S${specificError.code}` : new Date().getTime()}.` // Error codes starting with S mean that they are special error codes.
 	);
+}
+
+export function dailyStatusChange(
+	action: "recorded" | "deleted",
+	user: Pick<OngoingChats["user"], "currentStatus">,
+	currentLine: string,
+	thingsYouCanDoNow: { delete: boolean; addMore: boolean; next: boolean; cancel: boolean }
+): Discord.MessageEmbed {
+	const embedFields: Discord.EmbedField[] = [];
+	embedFields.push({ name: `I have ${action} this line:`, value: currentLine, inline: false });
+	embedFields.push({ name: "Things you can do now", value: "----------------------------------", inline: false });
+	if (thingsYouCanDoNow.delete)
+		embedFields.push({
+			name: `Delete ${action === "recorded" ? "this" : "previous line you wrote"} from the report`,
+			value: `Just type '${prefix}delete'`,
+			inline: false
+		});
+	const isCurrentlyBlocks = user.currentStatus === userChatStatuses.BLOCKS;
+	if (thingsYouCanDoNow.addMore)
+		embedFields.push({
+			name: `Add more to your ${user.currentStatus}'${!isCurrentlyBlocks ? "s" : ""} list`,
+			value: "Just type what you want to add if you want to do this.",
+			inline: false
+		});
+	if (thingsYouCanDoNow.next)
+		embedFields.push({
+			name: `${isCurrentlyBlocks ? "End your report and get it sent" : "Switch to next question"}`,
+			value: `Just type '${prefix}${isCurrentlyBlocks ? "end" : "next"}'`,
+			inline: false
+		});
+	if (thingsYouCanDoNow.cancel)
+		embedFields.push({ name: "Cancel your report", value: `Just type '${prefix}cancel'`, inline: false });
+	return new Discord.MessageEmbed({ color: 7960960, fields: embedFields });
 }
