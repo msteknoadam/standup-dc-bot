@@ -250,7 +250,7 @@ async function handleNotes(message: Discord.Message): Promise<void> {
 						`Error while inserting note. Stringified note: '${JSON.stringify(embedData)}' . Error: `,
 						err
 					);
-					return void message.channel.send("There was an error while saving your note. Please try again.");
+					return sendErrorMessage(message);
 				}
 
 				return message.channel.send(new Discord.MessageEmbed(embedData));
@@ -264,7 +264,7 @@ async function handleNotes(message: Discord.Message): Promise<void> {
 				.exec((err, currentNotes) => {
 					if (err) {
 						console.error("Error while running db.find.sort.exec on 'notes get' command. Error: ", err);
-						return void message.channel.send("An unexpected error occured, please try again later.");
+						return sendErrorMessage(message);
 					}
 
 					if (currentNotes.length <= 0) return void message.channel.send("There are no saved notes yet.");
@@ -283,7 +283,7 @@ async function handleNotes(message: Discord.Message): Promise<void> {
 			notesDB.findOne({ _id: index }, (err, messageToRemove) => {
 				if (err) {
 					console.error(`Error while finding note to delete. Requested id was '${index}'. Error: `, err);
-					return void message.channel.send("Some unexpected error happened. Please try again.");
+					return sendErrorMessage(message);
 				}
 
 				if (!messageToRemove) return void message.channel.send(`There are no messages with ID ${index}`);
@@ -291,7 +291,7 @@ async function handleNotes(message: Discord.Message): Promise<void> {
 				return notesDB.remove({ _id: index }, {}, (err) => {
 					if (err) {
 						console.error(`Error while finding note to delete. Requested id was '${index}'. Error: `, err);
-						return void message.channel.send("Some unexpected error happened. Please try again.");
+						return sendErrorMessage(message);
 					}
 
 					messageToRemove.author = {
