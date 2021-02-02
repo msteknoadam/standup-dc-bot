@@ -28,3 +28,7 @@ export enum dmCommands {
 	"cancel" = "cancel",
 	"notes" = "notes"
 }
+
+export interface OngoingChats {
+	[s: string]: { currentStatus: userChatStatuses; yesterday: string[]; today: string[]; blocks: string[] };
+}

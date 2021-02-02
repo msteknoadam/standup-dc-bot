@@ -1,35 +1,15 @@
 import * as Discord from "discord.js";
-import { dmCommands, exitTypes, userChatStatuses } from "./types";
+import { dmCommands, exitTypes, OngoingChats, userChatStatuses } from "./types";
 import Datastore from "nedb";
 import path from "path";
 import CONFIG from "./config";
-import { getTimeUntilMonday } from "./util";
+import { getTimeUntilMonday, sendErrorMessage } from "./util";
 
 const notesDB = new Datastore({ filename: path.join(__dirname, "StandupNotes.db"), autoload: true });
-const ongoingChats: {
-	[s: string]: { currentStatus: userChatStatuses; yesterday: string[]; today: string[]; blocks: string[] };
-} = {};
+const ongoingChats: OngoingChats = {};
 const prefix = CONFIG.commandPrefix;
 
-async function sendErrorMessage(
-	userMessageThatCausedError: Discord.Message,
-	specificError?: { cause: string; code: number; silent?: boolean }
-): Promise<void> {
-	console.error(
-		`Error happened.${
-			specificError ? ` Error details: ${JSON.stringify(specificError)} |||` : ""
-		} User message: ${JSON.stringify(userMessageThatCausedError)}`
-	);
-	// Make sure error cause ends with "." or "!" or "?" so the message to be sent back to user doesn't look like it's coming from someone who doesn't know punctuation rules.
-	if (specificError && !specificError.cause.match(/[.!?]$/)) specificError.cause += ".";
-	return void userMessageThatCausedError.channel.send(
-		`${specificError && !specificError.silent ? specificError.cause : "Unknown error happened."} Please contact <@${
-			CONFIG.developerUserId
-		}> regarding this issue with this code: #${specificError ? `S${specificError.code}` : new Date().getTime()}.` // Error codes starting with S mean that they are special error codes.
-	);
-}
-
-async function createReportAndSend(userMessage: Discord.Message): Promise<void> {
+export async function createReportAndSend(userMessage: Discord.Message): Promise<void> {
 	userMessage.channel.send("Thanks for your report, I will now send this information to the proper chat.");
 	const uid = userMessage.author.id;
 	const user = ongoingChats[uid];
