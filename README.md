@@ -27,3 +27,7 @@ To run the server for **development** on your local computer, open terminal and 
 To run the server for **production** on a server, open terminal and run this command (Using tmux or screen etc. is recommended as this process will continuously run):
 
 -   `yarn start`
+
+If you want to run the server with monday standup check debugging, open terminal and run this command (Do not put <> characters when writing it, they are there to show you can write either dev or start so choose one of them and write without <> characters):
+
+-   `npx cross-env DEBUG_MONDAY_CHECK=1 yarn <dev/start>`
