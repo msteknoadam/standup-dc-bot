@@ -3,7 +3,9 @@ import { dmCommands, exitTypes, notesCommands, OngoingChats, userChatStatuses } 
 import Datastore from "nedb";
 import path from "path";
 import CONFIG from "./config";
-import { dailyStatusChange, getTimeUntilMonday, sendErrorMessage } from "./util";
+import { dailyStatusChange, sendErrorMessage } from "./util";
+
+let lastPosted = new Date(1609459200000); // 1st of Jan 2021 as dummy timestamp.
 
 const notesDB = new Datastore({ filename: path.join(__dirname, "StandupNotes.db"), autoload: true });
 const ongoingChats: OngoingChats = {};
@@ -312,6 +314,7 @@ To delete one of the notes (You can see IDs of notes when you use list command) 
 }
 
 function sendMondayStandupNotes(): void {
+	console.log(`${new Date().toLocaleString()} | Starting to send standup notes.`);
 	const standupServers = Object.keys(CONFIG.standupServers);
 
 	standupServers.forEach(async (serverId) => {
@@ -345,13 +348,10 @@ function sendMondayStandupNotes(): void {
 				if (notes.length > 0) notes.forEach((msg) => standupChat.send(new Discord.MessageEmbed(msg)));
 
 				notesDB.remove({}, { multi: true }); // Remove all notes so they are not sent again.
-				const timeUntilMonday = getTimeUntilMonday();
-				console.log(
-					`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${new Date(
-						new Date().getTime() + timeUntilMonday
-					)})`
-				);
-				setTimeout(sendMondayStandupNotes, timeUntilMonday);
+
+				lastPosted = new Date();
+				console.log(`${new Date().toLocaleString()} | Note sending job complete.`);
+
 				return;
 			});
 	});
@@ -361,13 +361,27 @@ const bot = new Discord.Client();
 
 bot.on("ready", async () => {
 	console.log("Bot has successfully logged in.");
-	const timeUntilMonday = getTimeUntilMonday();
-	console.log(
-		`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${new Date(
-			new Date().getTime() + timeUntilMonday
-		)})`
-	);
-	setTimeout(sendMondayStandupNotes, timeUntilMonday);
+	setInterval(() => {
+		const now = new Date();
+		const isMonday = now.getUTCDay() === 1;
+		const isStandupHour = now.getUTCHours() === 10;
+		const msPassedSinceLastPost = now.getTime() - lastPosted.getTime();
+		if (process.env.DEBUG_MONDAY_CHECK) {
+			console.table({
+				now: now.getTime(),
+				isMonday,
+				isStandupHour,
+				msPassedSinceLastPost
+			});
+		}
+		if (
+			isMonday && // Send on mondays
+			isStandupHour && // at 10 AM
+			msPassedSinceLastPost > 24 * 60 * 60 * 1000 // and prevent duplicates by checking if notes are already sent in last 1 day time span
+		) {
+			sendMondayStandupNotes();
+		}
+	}, 60 * 1000);
 });
 
 bot.on("reconnecting", async () => {
