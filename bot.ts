@@ -4,6 +4,7 @@ import Datastore from "nedb";
 import path from "path";
 import CONFIG from "./config";
 import { dailyStatusChange, getTimeUntilMonday, sendErrorMessage } from "./util";
+import { logger } from "./logger";
 
 const notesDB = new Datastore({ filename: path.join(__dirname, "StandupNotes.db"), autoload: true });
 const ongoingChats: OngoingChats = {};
@@ -58,7 +59,7 @@ export async function createReportAndSend(userMessage: Discord.Message): Promise
 			await reportsChat.send(embed);
 			return;
 		} catch (e) {
-			console.error(e);
+			logger.error(e);
 			return sendErrorMessage(
 				userMessage,
 				e.message && e.message.includes("Missing Access")
@@ -196,7 +197,7 @@ async function handleDMmessage(message: Discord.Message): Promise<void> {
 			}
 		}
 	} catch (e) {
-		console.error(e);
+		logger.error(e);
 		await sendErrorMessage(message);
 		return;
 	}
@@ -242,7 +243,7 @@ To delete one of the notes (You can see IDs of notes when you use list command) 
 			notesDB.insert(embedData, (err) => {
 				// Do not insert embed because it includes some other functions etc. which are not needed to be stored in db.
 				if (err) {
-					console.error(
+					logger.error(
 						`Error while inserting note. Stringified note: '${JSON.stringify(embedData)}' . Error: `,
 						err
 					);
@@ -260,7 +261,7 @@ To delete one of the notes (You can see IDs of notes when you use list command) 
 				.sort({ "fields.1.value": 1 })
 				.exec((err, currentNotes) => {
 					if (err) {
-						console.error("Error while running db.find.sort.exec on 'notes get' command. Error: ", err);
+						logger.error("Error while running db.find.sort.exec on 'notes get' command. Error: ", err);
 						return sendErrorMessage(message);
 					}
 
@@ -280,7 +281,7 @@ To delete one of the notes (You can see IDs of notes when you use list command) 
 			const index = args[0];
 			notesDB.findOne({ _id: index }, (err, messageToRemove) => {
 				if (err) {
-					console.error(`Error while finding note to delete. Requested id was '${index}'. Error: `, err);
+					logger.error(`Error while finding note to delete. Requested id was '${index}'. Error: `, err);
 					return sendErrorMessage(message);
 				}
 
@@ -288,7 +289,7 @@ To delete one of the notes (You can see IDs of notes when you use list command) 
 
 				return notesDB.remove({ _id: index }, {}, (err) => {
 					if (err) {
-						console.error(`Error while finding note to delete. Requested id was '${index}'. Error: `, err);
+						logger.error(`Error while finding note to delete. Requested id was '${index}'. Error: `, err);
 						return sendErrorMessage(message);
 					}
 
@@ -312,28 +313,29 @@ To delete one of the notes (You can see IDs of notes when you use list command) 
 }
 
 function sendMondayStandupNotes(): void {
+	logger.info("Starting to send standup notes.");
 	const standupServers = Object.keys(CONFIG.standupServers);
 
-	standupServers.forEach(async (serverId) => {
-		const standupServer = bot.guilds.cache.find((guild) => guild.id === serverId);
-		if (!standupServer) return;
-		const channelId = CONFIG.standupServers[serverId];
-		const standupChat = standupServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
-		if (!standupChat) return;
-		notesDB
-			.find({})
-			.sort({ "fields.1.value": 1 })
-			.exec((err, notes) => {
-				if (err) {
-					console.error(
-						"Error while running db.find.sort.exec on 'sendMondayStandupNotes' function. Error: ",
-						err
-					);
-					setTimeout(sendMondayStandupNotes, 5 * 60 * 1000);
-					return void standupChat.send(
-						`StandUp time <@&${standupServer.roles.everyone.id}>! Some error occured while I was trying to send notes for monday standup so I will be trying to send them again in 5 minutes.`
-					);
-				}
+	notesDB
+		.find({})
+		.sort({ "fields.1.value": 1 })
+		.exec((err, notes) => {
+			if (err) {
+				logger.error(
+					"Error while running db.find.sort.exec on 'sendMondayStandupNotes' function. Error: ",
+					err
+				);
+				setTimeout(sendMondayStandupNotes, 5 * 60 * 1000);
+				return;
+			}
+
+			standupServers.forEach(async (serverId) => {
+				const standupServer = bot.guilds.cache.find((guild) => guild.id === serverId);
+				if (!standupServer) return logger.warn(`Couldn't find the StandUp server with id ${serverId}`);
+				const channelId = CONFIG.standupServers[serverId];
+				const standupChat = standupServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
+				if (!standupChat)
+					return logger.warn(`Couldn't find the StandUp chat with id ${channelId} inside server ${serverId}`);
 
 				standupChat.send(
 					`StandUp time <@&${standupServer.roles.everyone.id}>! ${
@@ -344,25 +346,29 @@ function sendMondayStandupNotes(): void {
 				);
 				if (notes.length > 0) notes.forEach((msg) => standupChat.send(new Discord.MessageEmbed(msg)));
 
-				notesDB.remove({}, { multi: true }); // Remove all notes so they are not sent again.
-				const timeUntilMonday = getTimeUntilMonday();
-				console.log(
-					`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${new Date(
-						new Date().getTime() + timeUntilMonday
-					)})`
-				);
-				setTimeout(sendMondayStandupNotes, timeUntilMonday);
 				return;
 			});
-	});
+
+			notesDB.remove({}, { multi: true }); // Remove all notes so they are not sent again.
+			const timeUntilMonday = getTimeUntilMonday();
+			logger.info(
+				`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${new Date(
+					new Date().getTime() + timeUntilMonday
+				)})`
+			);
+			setTimeout(sendMondayStandupNotes, timeUntilMonday);
+
+			logger.info("Note sending job complete.");
+		});
 }
 
 const bot = new Discord.Client();
 
 bot.on("ready", async () => {
 	console.log("Bot has successfully logged in.");
+	logger.info("Bot has successfully logged in.");
 	const timeUntilMonday = getTimeUntilMonday();
-	console.log(
+	logger.info(
 		`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${new Date(
 			new Date().getTime() + timeUntilMonday
 		)})`
@@ -371,15 +377,15 @@ bot.on("ready", async () => {
 });
 
 bot.on("reconnecting", async () => {
-	console.error("Bot is currently unavailable, trying to reconnect.");
+	logger.error("Bot is currently unavailable, trying to reconnect.");
 });
 
 bot.on("disconnect", async () => {
-	console.error("Bot coulnd't reconnect, bot is not totally disconnected.");
+	logger.error("Bot coulnd't reconnect, bot is not totally disconnected.");
 });
 
 bot.on("error", async (error) => {
-	console.error(error);
+	logger.error(error);
 });
 
 bot.on(
@@ -410,7 +416,7 @@ bot.login(CONFIG.DISCORD_TOKEN);
 
 const gracefulShutdown = (exitType: exitTypes): void => {
 	bot.destroy();
-	console.log(`Gracefully shutting down the bot with reason '${exitType}'.`);
+	logger.info(`Gracefully shutting down the bot with reason '${exitType}'.`);
 	process.exit();
 };
 
@@ -418,5 +424,5 @@ Object.keys(exitTypes).forEach((exitType) => {
 	process.on(exitType, () => {
 		gracefulShutdown(exitType as exitTypes);
 	});
-	console.log(`Initialized exit listener for ${exitType}`);
+	logger.info(`Initialized exit listener for ${exitType}`);
 });

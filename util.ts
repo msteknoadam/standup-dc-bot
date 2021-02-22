@@ -9,12 +9,12 @@ const prefix = CONFIG.commandPrefix;
  */
 export function getTimeUntilMonday(mockMonday = false): number {
 	const monday = new Date();
-	monday.setUTCDate(monday.getUTCDate() + ((1 + 7 - monday.getUTCDay()) % 7)); // Set date to monday
+	monday.setDate(monday.getUTCDate() + ((7 - monday.getUTCDay()) % 7) + 1); // Set date to monday
 	monday.setUTCHours(10); // Set hour to exactly 10AM UTC
 	monday.setUTCMinutes(0);
 	monday.setUTCSeconds(0);
 	monday.setUTCMilliseconds(0);
-	return mockMonday ? 120 : monday.getTime() - new Date().getTime();
+	return mockMonday ? 1 * 60 * 1000 : monday.getTime() - new Date().getTime();
 }
 
 export async function sendErrorMessage(
