@@ -322,43 +322,78 @@ function sendMondayStandupNotes(): void {
 		.exec((err, notes) => {
 			if (err) {
 				logger.error(
-					"Error while running db.find.sort.exec on 'sendMondayStandupNotes' function. Error: ",
-					err
+					`Error while running db.find.sort.exec on 'sendMondayStandupNotes' function. Error: ${err}`
 				);
 				setTimeout(sendMondayStandupNotes, 5 * 60 * 1000);
 				return;
 			}
 
-			standupServers.forEach(async (serverId) => {
-				const standupServer = bot.guilds.cache.find((guild) => guild.id === serverId);
-				if (!standupServer) return logger.warn(`Couldn't find the StandUp server with id ${serverId}`);
-				const channelId = CONFIG.standupServers[serverId];
-				const standupChat = standupServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
-				if (!standupChat)
-					return logger.warn(`Couldn't find the StandUp chat with id ${channelId} inside server ${serverId}`);
+			new Promise((resolve, reject) => {
+				standupServers.forEach(async (serverId, serverIndex) => {
+					const standupServer = bot.guilds.cache.find((guild) => guild.id === serverId);
+					if (!standupServer) {
+						logger.warn(`Couldn't find the StandUp server with id ${serverId}`);
+						if (serverIndex === standupServers.length - 1) resolve(null); // It's not a big issue so we can just resolve here if it was the last one.
+						return;
+					}
+					const channelId = CONFIG.standupServers[serverId];
+					const standupChat = standupServer.channels.cache.get(channelId) as Discord.TextChannel | undefined;
+					if (!standupChat) {
+						logger.warn(`Couldn't find the StandUp chat with id ${channelId} inside server ${serverId}`);
+						if (serverIndex === standupServers.length - 1) resolve(null); // It's not a big issue so we can just resolve here if it was the last one.
+						return;
+					}
 
-				standupChat.send(
-					`StandUp time <@&${standupServer.roles.everyone.id}>! ${
-						notes.length > 0
-							? "Now I will send the notes you wanted me to remind."
-							: "There are no notes for me to remind."
-					}`
-				);
-				if (notes.length > 0) notes.forEach((msg) => standupChat.send(new Discord.MessageEmbed(msg)));
+					standupChat.send(
+						`StandUp time <@&${standupServer.roles.everyone.id}>! ${
+							notes.length > 0
+								? "Now I will send the notes you wanted me to remind."
+								: "There are no notes for me to remind."
+						}`
+					);
+					if (notes.length > 0)
+						notes.forEach(async (msg, i) => {
+							try {
+								await standupChat.send(new Discord.MessageEmbed(msg));
+							} catch (e) {
+								console.error("Error happened while sending standup notes -> ", e);
+								logger.error(
+									`Error happened while sending standup notes. Msg -> ${JSON.stringify(
+										msg
+									)} \n\n Error -> ${e}`
+								);
+								reject(e);
+							}
+						});
 
-				return;
-			});
+					if (serverIndex === standupServers.length - 1) resolve(null);
 
-			notesDB.remove({}, { multi: true }); // Remove all notes so they are not sent again.
-			const timeUntilMonday = getTimeUntilMonday();
-			logger.info(
-				`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${new Date(
-					new Date().getTime() + timeUntilMonday
-				)})`
+					return;
+				});
+			}).then(
+				() => {
+					notesDB.remove({}, { multi: true }); // Remove all notes so they are not sent again.
+					const timeUntilMonday = getTimeUntilMonday();
+					logger.info(
+						`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(
+							2
+						)} minutes. (At ${new Date(new Date().getTime() + timeUntilMonday)})`
+					);
+					setTimeout(sendMondayStandupNotes, timeUntilMonday);
+
+					logger.info("Note sending job complete.");
+				},
+				(rejection) => {
+					console.error(
+						"Error happened while sending standup notes to at least one of the servers. Trying again in 10 minutes. Error -> ",
+						rejection
+					);
+					logger.error(
+						`Error happened while sending standup notes to at least one of the servers. Trying again in 10 minutes. Error -> ${rejection}`
+					);
+					setTimeout(sendMondayStandupNotes, 10 * 60 * 1000);
+				}
 			);
-			setTimeout(sendMondayStandupNotes, timeUntilMonday);
-
-			logger.info("Note sending job complete.");
 		});
 }
 
