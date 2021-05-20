@@ -4,17 +4,15 @@ import { OngoingChats, userChatStatuses } from "./types";
 
 const prefix = CONFIG.commandPrefix;
 
-/** Returns time until next monday in ms
- * @param mockMonday If set to true, the function will return 120 seconds instead of time until next monday. Useful while testing on local.
- */
-export function getTimeUntilMonday(mockMonday = false): number {
+/** Returns time until next monday in ms */
+export function getTimeUntilMonday(): number {
 	const monday = new Date();
 	monday.setDate(monday.getUTCDate() + ((7 - monday.getUTCDay()) % 7) + 1); // Set date to monday
 	monday.setUTCHours(10); // Set hour to exactly 10AM UTC
 	monday.setUTCMinutes(0);
 	monday.setUTCSeconds(0);
 	monday.setUTCMilliseconds(0);
-	return mockMonday ? 1 * 60 * 1000 : monday.getTime() - new Date().getTime();
+	return monday.getTime() - new Date().getTime();
 }
 
 export async function sendErrorMessage(
