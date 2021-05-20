@@ -352,7 +352,7 @@ function sendMondayStandupNotes(): void {
 						}`
 					);
 					if (notes.length > 0)
-						notes.forEach(async (msg, i) => {
+						notes.forEach(async (msg) => {
 							try {
 								await standupChat.send(new Discord.MessageEmbed(msg));
 							} catch (e) {
