@@ -8,7 +8,7 @@ const prefix = CONFIG.commandPrefix;
 export function getTimeUntilMonday(): number {
 	const monday = new Date();
 	monday.setDate(monday.getUTCDate() + ((7 - monday.getUTCDay()) % 7) + 1); // Set date to monday
-	monday.setUTCHours(10); // Set hour to exactly 10AM UTC
+	monday.setUTCHours(9); // Set hour to exactly 10AM UTC
 	monday.setUTCMinutes(0);
 	monday.setUTCSeconds(0);
 	monday.setUTCMilliseconds(0);
