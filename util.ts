@@ -15,10 +15,11 @@ export function getTimeUntilNextStandup(): number {
 		meetingDate = fns.nextTuesday(meetingDate); // meeting is every 2 weeks
 	}
 	meetingDate.setUTCHours(CONFIG.meeting.hour, CONFIG.meeting.minute, 0, 0);
+	const msLeft = meetingDate.getTime() - Date.now()
 	logger.info(
-		`Next StandUp will be held in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${meetingDate})`
+		`Next StandUp will be held in ${(msLeft / 60 / 1000).toFixed(2)} minutes. (At ${meetingDate})`
 	);
-	return meetingDate.getTime() - Date.now();
+	return msLeft;
 }
 
 export async function sendErrorMessage(
