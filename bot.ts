@@ -411,24 +411,27 @@ bot.on("error", async (error) => {
 	logger.error(error);
 });
 
-bot.on("message", async (message): Promise<void> => {
-	if (message.author.bot) return;
+bot.on(
+	"message",
+	async (message): Promise<void> => {
+		if (message.author.bot) return;
 
-	if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
-		// Dev tool to let developer run commands live.
-		try {
-			const response = eval(message.content.slice(`${prefix}eval`.length));
-			await message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
-			return;
-		} catch (err) {
-			message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
-			return;
+		if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
+			// Dev tool to let developer run commands live.
+			try {
+				const response = eval(message.content.slice(`${prefix}eval`.length));
+				await message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
+				return;
+			} catch (err) {
+				message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
+				return;
+			}
 		}
-	}
 
-	if (message.channel.type === "dm") return handleDMmessage(message);
-	// No need to handle other cases since this bot only checks DM messages and then sends message by itself.
-});
+		if (message.channel.type === "dm") return handleDMmessage(message);
+		// No need to handle other cases since this bot only checks DM messages and then sends message by itself.
+	}
+);
 
 bot.login(CONFIG.DISCORD_TOKEN);
 
