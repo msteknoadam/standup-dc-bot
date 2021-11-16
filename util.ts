@@ -70,3 +70,8 @@ export function dailyStatusChange(
 		embedFields.push({ name: "Cancel your report", value: `Just type '${prefix}cancel'`, inline: false });
 	return new Discord.MessageEmbed({ color: 7960960, fields: embedFields });
 }
+
+// https://github.com/microsoft/TypeScript/issues/21732
+export function hasKey<K extends string>(e: unknown, key: K): e is { [k in K]: unknown } {
+	return typeof e === "object" && e !== null && key in (e as { key: unknown });
+}

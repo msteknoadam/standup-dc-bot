@@ -3,7 +3,7 @@ import { dmCommands, exitTypes, notesCommands, OngoingChats, userChatStatuses } 
 import Datastore from "nedb";
 import path from "path";
 import CONFIG from "./config";
-import { dailyStatusChange, getTimeUntilNextStandup, sendErrorMessage } from "./util";
+import { dailyStatusChange, getTimeUntilNextStandup, hasKey, sendErrorMessage } from "./util";
 import { logger } from "./logger";
 
 const notesDB = new Datastore({ filename: path.join(__dirname, "StandupNotes.db"), autoload: true });
@@ -62,7 +62,7 @@ export async function createReportAndSend(userMessage: Discord.Message): Promise
 			logger.error(e);
 			return sendErrorMessage(
 				userMessage,
-				e.message && e.message.includes("Missing Access")
+				hasKey(e, "message") && typeof e.message === "string" && e.message.includes("Missing Access")
 					? {
 							cause: `Bot doesn't have access to channel '${channelId}' inside server '${serverId}'.`,
 							code: 401,
@@ -423,7 +423,11 @@ bot.on(
 				await message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
 				return;
 			} catch (err) {
-				message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
+				message.channel.send(
+					`There has been an error. Error: \`\`\`js\n${
+						hasKey(err, "message") && typeof err.message === "string" ? err.message : "Unknown error"
+					}\n\`\`\``
+				);
 				return;
 			}
 		}
