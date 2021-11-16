@@ -14,6 +14,7 @@ export function getTimeUntilNextStandup(): number {
 	while (fns.differenceInDays(meetingDate, firstStandupDate) % 14 !== 0) {
 		meetingDate = fns.nextTuesday(meetingDate); // meeting is every 2 weeks
 	}
+	meetingDate.setUTCHours(CONFIG.meeting.hour, CONFIG.meeting.minute, 0, 0);
 	logger.info(
 		`Next StandUp will be held in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${meetingDate})`
 	);

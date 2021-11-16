@@ -5,6 +5,11 @@ export interface ConfigType {
 	standupServers: { [serverId: string]: string }; // { server1Id: standupChannel1Id, server2Id: standupChannel2-1Id, server2Id: standupChannel2-2Id }
 	developerUserId: string;
 	firstMeetingDay: string; // YYYY-MM-DD
+	// UTC
+	meetingTime: {
+		hour: number;
+		minute: number;
+	};
 }
 
 export enum exitTypes {

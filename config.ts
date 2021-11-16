@@ -16,7 +16,13 @@ const CONFIG: ConfigType = {
 			"YOU_CAN_GET_THIS_BY_RIGHT_CLICKING_TO_CHAT_YOU_WANT_TO_USE_AFTER_ENABLING_DEVELOPER_MODE_ON_DISCORD"
 	},
 	developerUserId: "YOU_CAN_GET_THIS_BY_RIGHT_CLICKING_TO_YOURSELF_AFTER_ENABLING_DEVELOPER_MODE_ON_DISCORD",
-	firstMeetingDate: "2021-11-09"
+	// YYYY-MM-DD
+	firstMeetingDate: "2021-11-09",
+	// UTC
+	meetingTime: {
+		hour: 9,
+		minute: 30
+	}
 };
 
 const localConfigPath = path.join(__dirname, "config.local.ts");
