@@ -1,18 +1,23 @@
 import * as Discord from "discord.js";
 import CONFIG from "./config";
 import { OngoingChats, userChatStatuses } from "./types";
+import * as fns from "date-fns";
+import { logger } from "./logger";
 
 const prefix = CONFIG.commandPrefix;
+const firstStandupDate = new Date(CONFIG.firstMeetingDay);
 
-/** Returns time until next monday in ms */
-export function getTimeUntilMonday(): number {
-	const monday = new Date();
-	monday.setDate(monday.getUTCDate() + ((7 - monday.getUTCDay()) % 7) + 1); // Set date to monday
-	monday.setUTCHours(9); // Set hour to exactly 10AM UTC
-	monday.setUTCMinutes(0);
-	monday.setUTCSeconds(0);
-	monday.setUTCMilliseconds(0);
-	return monday.getTime() - new Date().getTime();
+/** Returns time until next standup in ms */
+export function getTimeUntilNextStandup(): number {
+	const today = new Date();
+	let meetingDate = fns.nextTuesday(today);
+	while (fns.differenceInDays(meetingDate, firstStandupDate) % 14 !== 0) {
+		meetingDate = fns.nextTuesday(meetingDate); // meeting is every 2 weeks
+	}
+	logger.info(
+		`Next StandUp will be held in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${meetingDate})`
+	);
+	return meetingDate.getTime() - Date.now();
 }
 
 export async function sendErrorMessage(

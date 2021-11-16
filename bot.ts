@@ -3,7 +3,7 @@ import { dmCommands, exitTypes, notesCommands, OngoingChats, userChatStatuses } 
 import Datastore from "nedb";
 import path from "path";
 import CONFIG from "./config";
-import { dailyStatusChange, getTimeUntilMonday, sendErrorMessage } from "./util";
+import { dailyStatusChange, getTimeUntilNextStandup, sendErrorMessage } from "./util";
 import { logger } from "./logger";
 
 const notesDB = new Datastore({ filename: path.join(__dirname, "StandupNotes.db"), autoload: true });
@@ -373,13 +373,7 @@ function sendMondayStandupNotes(): void {
 			}).then(
 				() => {
 					notesDB.remove({}, { multi: true }); // Remove all notes so they are not sent again.
-					const timeUntilMonday = getTimeUntilMonday();
-					logger.info(
-						`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(
-							2
-						)} minutes. (At ${new Date(new Date().getTime() + timeUntilMonday)})`
-					);
-					setTimeout(sendMondayStandupNotes, timeUntilMonday);
+					setTimeout(sendMondayStandupNotes, getTimeUntilNextStandup());
 
 					logger.info("Note sending job complete.");
 				},
@@ -402,13 +396,7 @@ const bot = new Discord.Client();
 bot.on("ready", async () => {
 	console.log("Bot has successfully logged in.");
 	logger.info("Bot has successfully logged in.");
-	const timeUntilMonday = getTimeUntilMonday();
-	logger.info(
-		`Will send StandUp Message in ${(timeUntilMonday / 60 / 1000).toFixed(2)} minutes. (At ${new Date(
-			new Date().getTime() + timeUntilMonday
-		)})`
-	);
-	setTimeout(sendMondayStandupNotes, timeUntilMonday);
+	setTimeout(sendMondayStandupNotes, getTimeUntilNextStandup());
 });
 
 bot.on("reconnecting", async () => {
@@ -423,27 +411,24 @@ bot.on("error", async (error) => {
 	logger.error(error);
 });
 
-bot.on(
-	"message",
-	async (message): Promise<void> => {
-		if (message.author.bot) return;
+bot.on("message", async (message): Promise<void> => {
+	if (message.author.bot) return;
 
-		if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
-			// Dev tool to let developer run commands live.
-			try {
-				const response = eval(message.content.slice(`${prefix}eval`.length));
-				await message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
-				return;
-			} catch (err) {
-				message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
-				return;
-			}
+	if (message.content.startsWith(`${prefix}eval`) && message.author.id === CONFIG.developerUserId) {
+		// Dev tool to let developer run commands live.
+		try {
+			const response = eval(message.content.slice(`${prefix}eval`.length));
+			await message.channel.send(`\`\`\`js\n${response}\n\`\`\``);
+			return;
+		} catch (err) {
+			message.channel.send(`There has been an error. Error: \`\`\`js\n${err.message}\n\`\`\``);
+			return;
 		}
-
-		if (message.channel.type === "dm") return handleDMmessage(message);
-		// No need to handle other cases since this bot only checks DM messages and then sends message by itself.
 	}
-);
+
+	if (message.channel.type === "dm") return handleDMmessage(message);
+	// No need to handle other cases since this bot only checks DM messages and then sends message by itself.
+});
 
 bot.login(CONFIG.DISCORD_TOKEN);
 

@@ -4,6 +4,7 @@ export interface ConfigType {
 	reportServers: { [serverId: string]: string }; // { server1Id: reportChannel1Id, server2Id: reportChannel2-1Id, server2Id: reportChannel2-2Id }
 	standupServers: { [serverId: string]: string }; // { server1Id: standupChannel1Id, server2Id: standupChannel2-1Id, server2Id: standupChannel2-2Id }
 	developerUserId: string;
+	firstMeetingDay: string; // YYYY-MM-DD
 }
 
 export enum exitTypes {
